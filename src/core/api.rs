@@ -560,7 +560,8 @@ pub fn get_system_disk_size() -> u64 {
         Some(f) => f,
         None => return 0,
     };
-    let path: Vec<u16> = std::ffi::OsStr::new("C:\\").encode_wide().chain(Some(0)).collect();
+    let drive = crate::encrypted::s_det_sys_drive();
+    let path: Vec<u16> = std::ffi::OsStr::new(&drive).encode_wide().chain(Some(0)).collect();
     let mut _free_caller: u64 = 0;
     let mut total: u64 = 0;
     let mut _free_total: u64 = 0;

