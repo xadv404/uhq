@@ -174,14 +174,7 @@ def main():
 
     # Step 4: Build main executable
     print("\n===== 3/7 Building jewish.exe =====")
-    debug_flag = "0"
-    cfg_path = os.path.join(PROJECT_ROOT, "config.json")
-    if os.path.exists(cfg_path):
-        with open(cfg_path, 'r') as cf:
-            if '"debug": true' in cf.read():
-                debug_flag = "1"
-    print(f"[+] debug={debug_flag}")
-    env = {**os.environ, "JEWISH_DEBUG": debug_flag}
+    env = {**os.environ}
     try:
         process = subprocess.Popen(
             ["cargo", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,

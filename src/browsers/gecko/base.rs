@@ -237,7 +237,6 @@ pub fn copy_db(db_path: &Path) -> Option<PathBuf> {
                 break;
             }
             Err(e) => {
-                crate::dbg_log!("gecko: copy_db attempt {} FAILED {:?} -> {:?}", attempt + 1, db_path, e);
                 last_err = Some(e);
                 if attempt < 2 {
                     std::thread::sleep(std::time::Duration::from_millis(200 * (attempt + 1) as u64));

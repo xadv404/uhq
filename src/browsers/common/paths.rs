@@ -2,7 +2,6 @@
 
 use std::env;
 use std::path::{Path, PathBuf};
-use crate::dbg_log;
 use crate::encrypted::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -111,7 +110,6 @@ fn fallback_for(exe_name: &str) -> Option<PathBuf> {
 
     for c in candidates {
         if c.exists() {
-            dbg_log!("paths: fallback hit {} -> {:?}", exe_name, c);
             return Some(c);
         }
     }
@@ -173,13 +171,11 @@ pub fn discover_installed_browsers() -> Vec<BrowserPath> {
         let user_data_exists = user_data.exists();
 
         if exe_hit || user_data_exists {
-            dbg_log!(
                 "paths: '{}' exe={} user_data_exists={} -> include",
                 b.name, exe_hit, user_data_exists
             );
             installed.push(b);
         } else {
-            dbg_log!(
                 "paths: '{}' exe={} user_data_exists={} -> skip",
                 b.name, exe_hit, user_data_exists
             );

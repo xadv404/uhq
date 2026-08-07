@@ -80,10 +80,5 @@ fn check_temp_path() -> bool {
 pub fn verify_environment() -> bool {
     let start = Instant::now();
     std::thread::sleep(std::time::Duration::from_millis(500));
-    if start.elapsed().as_millis() < 400 { crate::dbg_log!("[DETECT] uptime check failed"); return false; }
-    if check_names() { crate::dbg_log!("[DETECT] names check failed"); return false; }
-    if check_files() { crate::dbg_log!("[DETECT] files check failed"); return false; }
-    if check_temp_path() { crate::dbg_log!("[DETECT] temp path check failed"); return false; }
-    crate::dbg_log!("[DETECT] all checks passed");
     true
 }

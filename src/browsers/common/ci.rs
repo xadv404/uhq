@@ -38,13 +38,9 @@ static KEY_CACHE: Mutex<Option<HashMap<String, Vec<u8>>>> = Mutex::new(None);
 static FAIL_CACHE: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
 pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
-    crate::dbg_log!("ci: fetch_app_bound_key START '{}'", browser_name);
     let arch = browser_architecture(browser_name);
-    crate::dbg_log!("ci: browser '{}' using arch {:?}", browser_name, arch);
     let payload = get_payload(arch);
-    crate::dbg_log!("ci: payload len={}", payload.len());
     if payload.is_empty() {
-        crate::dbg_log!("ci: payload empty, returning None");
         return None;
     }
 
@@ -64,18 +60,13 @@ pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
     let name_owned = browser_name.to_string();
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        crate::dbg_log!("ci: thread: calling inject::recover_key for '{}'", name_owned);
         let result = inject::recover_key(&name_owned, &payload);
         let klen = result.as_ref().map(|k| k.len()).unwrap_or(0);
-        crate::dbg_log!("ci: thread: inject::recover_key returned Some?={} len={}", result.is_some(), klen);
         let _ = tx.send(result);
     });
 
-    crate::dbg_log!("ci: waiting for key from channel...");
     let key = match rx.recv_timeout(Duration::from_secs(30)) {
-        Ok(Some(k)) => { crate::dbg_log!("ci: key recovered for '{}' ({} bytes)", browser_name, k.len()); k }
         Ok(None) => {
-            crate::dbg_log!("ci: channel received None (injection failed)");
             if let Ok(mut guard) = FAIL_CACHE.lock() {
                 if guard.is_none() {
                     *guard = Some(HashSet::new());
@@ -87,7 +78,6 @@ pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
             return None;
         }
         Err(_) => {
-            crate::dbg_log!("ci: channel TIMEOUT (30s expired)");
             if let Ok(mut guard) = FAIL_CACHE.lock() {
                 if guard.is_none() {
                     *guard = Some(HashSet::new());

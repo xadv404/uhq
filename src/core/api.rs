@@ -255,7 +255,6 @@ pub fn check_uptime() -> bool {
 pub fn check_resolution() -> bool {
     let cx = get_system_metrics(SM_CXSCREEN);
     let cy = get_system_metrics(SM_CYSCREEN);
-    crate::dbg_log!("DEBUG resolution: cx={}, cy={}", cx, cy);
     cx >= 800 && cy >= 600
 }
 

