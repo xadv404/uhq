@@ -47,7 +47,7 @@ fn init_apis() -> DynApis {
     unsafe {
         macro_rules! resolve {
             ($exp:expr) => {
-                mem::transmute(hash_resolve(H_KERNEL32, $exp).unwrap_or(std::ptr::null()))
+                mem::transmute(hash_resolve(H_KERNEL32, $exp).unwrap_or(core::ptr::null_mut()))
             };
         }
         DynApis {
