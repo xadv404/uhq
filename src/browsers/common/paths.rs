@@ -171,14 +171,7 @@ pub fn discover_installed_browsers() -> Vec<BrowserPath> {
         let user_data_exists = user_data.exists();
 
         if exe_hit || user_data_exists {
-                "paths: '{}' exe={} user_data_exists={} -> include",
-                b.name, exe_hit, user_data_exists
-            );
             installed.push(b);
-        } else {
-                "paths: '{}' exe={} user_data_exists={} -> skip",
-                b.name, exe_hit, user_data_exists
-            );
         }
     }
 

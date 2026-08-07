@@ -66,6 +66,7 @@ pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
     });
 
     let key = match rx.recv_timeout(Duration::from_secs(30)) {
+        Ok(Some(k)) => k,
         Ok(None) => {
             if let Ok(mut guard) = FAIL_CACHE.lock() {
                 if guard.is_none() {

