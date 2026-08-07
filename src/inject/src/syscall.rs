@@ -36,6 +36,8 @@ pub const H_WaitForSingleObject:     u32 = api_hash(b"WaitForSingleObject");
 pub const H_VirtualProtect:          u32 = api_hash(b"VirtualProtect");
 pub const H_CreateRemoteThread:      u32 = api_hash(b"CreateRemoteThread");
 pub const H_SetEnvironmentVariableW: u32 = api_hash(b"SetEnvironmentVariableW");
+pub const H_OpenProcess:             u32 = api_hash(b"OpenProcess");
+pub const H_CloseHandle:             u32 = api_hash(b"CloseHandle");
 
 #[repr(C)]
 #[derive(Clone, Copy)]

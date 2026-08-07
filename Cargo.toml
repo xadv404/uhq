@@ -46,3 +46,4 @@ windows = { version = "0.58", features = [
 flate2 = "1.0"                     # pour build.rs
 winresource = "0.1"
 aes-gcm = "0.10"
+

