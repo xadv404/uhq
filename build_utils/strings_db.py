@@ -532,7 +532,8 @@ STRINGS = [
     ("elev_chrome_clsidx", "704C2872-2049-435E-A469-0A534313C42B"),
     ("elev_edge_clsidx", "DD2646BA-3707-4BF8-B9A7-038691A68FC2"),
 
-    # === api.rs - Windows API ===
+    # === api.rs - Windows API (DLL/export names now resolved by hash; kept for
+    #     any remaining callers that still use the encrypted string path) ===
     ("api_kernel32", "kernel32"),
     ("api_ntdll", "ntdll"),
     ("api_setenv", "SetEnvironmentVariableW"),

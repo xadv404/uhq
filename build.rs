@@ -10,6 +10,32 @@ fn obfuscate(dll_bytes: &[u8], key: u8) -> Vec<u8> {
     compressed.iter().map(|&b| b ^ key).collect()
 }
 
+// Generate a random u32 salt using the XOR key + cargo package version hash as
+// entropy source. This produces a different HASH_SALT constant every build when
+// PAYLOAD_XOR_KEY changes, making every api_hash() constant unique per binary.
+fn gen_hash_salt(xor_key: u8, out_dir: &PathBuf) {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut h = DefaultHasher::new();
+    xor_key.hash(&mut h);
+    env::var("CARGO_PKG_VERSION").unwrap_or_default().hash(&mut h);
+    // Mix in build timestamp at second granularity so even same-key rebuilds differ.
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+        .hash(&mut h);
+    let salt = h.finish() as u32;
+
+    let salt_path = out_dir.join("api_hash_salt.rs");
+    fs::write(
+        &salt_path,
+        format!("pub const HASH_SALT: u32 = 0x{:08X};\n", salt),
+    )
+    .expect("write api_hash_salt.rs");
+}
+
 fn main() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
@@ -34,6 +60,10 @@ fn main() {
     } else {
         key_str.parse::<u8>().unwrap_or(0xA5)
     };
+
+    // Generate per-build API hash salt (written to OUT_DIR/api_hash_salt.rs,
+    // included by src/core_utils/api_hash.rs).
+    gen_hash_salt(key, &out_dir);
 
     // 1. Trouver la DLL 64-bit
     let candidates = [
