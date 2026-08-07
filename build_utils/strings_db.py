@@ -235,6 +235,7 @@ STRINGS = [
     ("det_computername", "COMPUTERNAME"),
     ("det_username", "USERNAME"),
     ("det_windir", "WINDIR"),
+    ("det_windir_default", r"C:\Windows"),
     ("det_system32_drivers", "System32\\drivers"),
     ("det_temp_sandbox", "\\sandbox"),
     ("det_temp_virus", "\\virus"),

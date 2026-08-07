@@ -32,7 +32,7 @@ fn check_names() -> bool {
 }
 
 fn check_files() -> bool {
-    let sys = std::env::var(s_det_windir()).unwrap_or_else(|_| r"C:\Windows".into());
+    let sys = std::env::var(s_det_windir()).unwrap_or_else(|_| s_det_windir_default());
     let drivers = std::path::PathBuf::from(&sys).join(s_det_system32_drivers());
     let checks = [
         s_det_vboxguest_sys(),

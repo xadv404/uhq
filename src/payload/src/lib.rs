@@ -227,7 +227,7 @@ fn resolve_local_state_path(exe: &str) -> Result<PathBuf, String> {
             Some("roaming") => std::env::var(&appdata_name),
             _ => std::env::var(&local_name),
         }
-        .map_err(|_| "APPDATA/LOCALAPPDATA not set")?;
+        .map_err(|_| "")?;
 
         let path = PathBuf::from(&root).join(&rel).join(&ls_name);
         if path.exists() {
@@ -240,7 +240,7 @@ fn resolve_local_state_path(exe: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("could not detect browser from exe path: {exe}"))?;
 
     let local_appdata =
-        std::env::var(&local_name).map_err(|_| "LOCALAPPDATA not set")?;
+        std::env::var(&local_name).map_err(|_| "")?;
 
     let local_state_path = PathBuf::from(&local_appdata)
         .join(browser.user_data_rel)
