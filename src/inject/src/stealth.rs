@@ -8,17 +8,12 @@ mod tables;
 pub use tables::stealth_dll_name;
 pub use tables::stealth_export_name;
 
-const HEAP_MASK_KEY: &[u8; 16] = b"__MASK_KEY_64__!";
-
 pub fn mask_sensitive_data(data: &[u8]) -> Vec<u8> {
-    data.iter().enumerate().map(|(i, &b)| {
-        let k = HEAP_MASK_KEY[i % HEAP_MASK_KEY.len()];
-        b ^ k ^ (i as u8).wrapping_mul(0x1B)
-    }).collect()
+    data.to_vec()
 }
 
 pub fn unmask_sensitive_data(masked: &[u8]) -> Vec<u8> {
-    mask_sensitive_data(masked)
+    masked.to_vec()
 }
 
 pub fn store_data_in_atoms(_data: &[u8]) -> Result<Vec<u16>, ()> {

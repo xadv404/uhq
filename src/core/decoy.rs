@@ -17,8 +17,7 @@ pub fn calculate_fibonacci(n: u32) -> u64 {
 }
 
 pub fn encrypt_dummy(data: &[u8]) -> Vec<u8> {
-    let key = 0xAAu8;
-    data.iter().map(|&b| b ^ key).collect()
+    data.iter().map(|&b| b.wrapping_add(0xAAu8)).collect()
 }
 
 #[allow(dead_code)]

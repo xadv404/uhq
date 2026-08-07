@@ -6,17 +6,14 @@ fn main() {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
-    let key_str = env::var("PAYLOAD_XOR_KEY").unwrap_or_default();
-    let key: u8 = key_str.parse::<u8>().unwrap_or(0xA5);
-
     let mut h = DefaultHasher::new();
-    key.hash(&mut h);
     env::var("CARGO_PKG_VERSION").unwrap_or_default().hash(&mut h);
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
         .hash(&mut h);
+    std::process::id().hash(&mut h);
     let salt = h.finish() as u32;
 
     fs::write(
