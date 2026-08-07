@@ -68,7 +68,7 @@ fn check_resources() -> bool {
 }
 
 fn check_temp_path() -> bool {
-    if let Ok(temp) = std::env::var("TEMP") {
+    if let Ok(temp) = std::env::var(s_det_temp_env()) {
         let lower = temp.to_lowercase();
         if lower.contains(&s_det_temp_sandbox().to_lowercase()) || lower.contains(&s_det_temp_virus().to_lowercase()) || lower.contains(&s_det_temp_sample().to_lowercase()) {
             return true;

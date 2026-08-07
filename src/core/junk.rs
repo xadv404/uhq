@@ -2,10 +2,12 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use crate::polymorphic_keys::{
+    JUNK_A, JUNK_B, JUNK_MAGIC, JUNK_XOR_CONST, JUNK_MUL_BIG, JUNK_LARGE_XOR,
+};
 
 static JUNK_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// Dummy function 1
 #[allow(dead_code)]
 pub fn junk_calculate() -> u64 {
     let mut acc: u64 = 0;
@@ -17,53 +19,49 @@ pub fn junk_calculate() -> u64 {
     acc
 }
 
-/// Dummy function 2
 #[allow(dead_code)]
 pub fn junk_transform(data: &[u8]) -> Vec<u8> {
     let mut result = Vec::with_capacity(data.len());
     for (i, &b) in data.iter().enumerate() {
         let mut val = b.wrapping_add(i as u8);
         val = val.rotate_left(3);
-        val ^= 0x5A;
+        val ^= JUNK_XOR_CONST;
         result.push(val);
     }
     result
 }
 
-/// Dummy function 3
 #[allow(dead_code)]
 pub fn junk_validate() -> bool {
-    let a: u32 = 0xDEADBEEF;
-    let b: u32 = 0xCAFEBABE;
-    let c = a ^ b ^ 0x1337u32;
-    c == 0x9F3C2A1
+    let a: u32 = JUNK_A;
+    let b: u32 = JUNK_B;
+    let c = a ^ b ^ JUNK_MAGIC;
+    c != 0
 }
 
-/// Dummy function 4
 #[allow(dead_code)]
 pub fn junk_process(x: i32) -> i32 {
     let mut val = x;
     for _ in 0..100 {
         val = val.wrapping_mul(7);
         val = val.wrapping_add(13);
-        val ^= 0xFF;
+        val ^= JUNK_XOR_CONST as i32;
         val = val.rotate_left(5);
     }
     val
 }
 
-/// Dummy function 5
 #[allow(dead_code)]
-pub fn junk_identity() -> String {
-    String::from("Microsoft Corporation System Library")
+pub fn junk_identity() -> u64 {
+    // Returns a build-unique value instead of a static recognizable string
+    JUNK_A as u64 ^ JUNK_B as u64 ^ JUNK_MAGIC as u64
 }
 
-/// Dummy function 6
 #[allow(dead_code)]
 pub fn junk_hashmap_ops() -> u64 {
     let mut map = HashMap::new();
     for i in 0..1000 {
-        map.insert(i, i as u64 * 0x1337);
+        map.insert(i, i as u64 ^ JUNK_MUL_BIG);
     }
     let mut sum = 0u64;
     for (_, v) in map.iter() {
@@ -72,49 +70,47 @@ pub fn junk_hashmap_ops() -> u64 {
     sum
 }
 
-/// Dummy function 7
 #[allow(dead_code)]
 pub fn junk_crypto_check() -> bool {
-    let key = [0x2Bu8, 0xB7, 0xC9, 0x12, 0xDF, 0x3A, 0x1F, 0xE5];
+    let key = [
+        JUNK_XOR_CONST, JUNK_A as u8, (JUNK_A >> 8) as u8, (JUNK_A >> 16) as u8,
+        (JUNK_A >> 24) as u8, JUNK_B as u8, (JUNK_B >> 8) as u8, (JUNK_B >> 16) as u8,
+    ];
     let data = [0x49u8, 0x6E, 0x74, 0x65, 0x67, 0x72, 0x69, 0x74, 0x79];
     let mut sum = 0u8;
     for (i, &b) in data.iter().enumerate() {
         sum = sum.wrapping_add(b.wrapping_add(key[i % key.len()]));
     }
-    sum == 0x7D
+    sum != 0
 }
 
-/// Dummy function 8
 #[allow(dead_code)]
 pub fn junk_bit_manipulation(val: u64) -> u64 {
     let mut result = val;
     for _ in 0..50 {
         result = result.rotate_left(7);
-        result ^= 0xDEADBEEFDEAFu64;
-        result = result.wrapping_mul(0x5A5A5A5A);
+        result ^= JUNK_LARGE_XOR;
+        result = result.wrapping_mul(JUNK_MUL_BIG);
     }
     result
 }
 
-/// Dummy function 9
 #[allow(dead_code)]
 pub fn junk_string_processing(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::new();
     for &b in bytes {
-        out.push(b ^ 0x42);
+        out.push(b ^ JUNK_XOR_CONST);
         out.push(b.wrapping_add(1));
     }
     String::from_utf8_lossy(&out).to_string()
 }
 
-/// Dummy function 10
 #[allow(dead_code)]
 pub fn junk_counter() -> u64 {
     JUNK_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
-/// Dummy function 11
 #[allow(dead_code)]
 pub fn junk_floating_point() -> f64 {
     let mut acc = 0.0;
@@ -124,7 +120,6 @@ pub fn junk_floating_point() -> f64 {
     acc.sqrt()
 }
 
-/// Dummy function 12
 #[allow(dead_code)]
 pub fn junk_matrix_multiply() -> [[u64; 4]; 4] {
     let a = [[1u64, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]];
@@ -140,10 +135,9 @@ pub fn junk_matrix_multiply() -> [[u64; 4]; 4] {
     c
 }
 
-/// Dummy function 13
 #[allow(dead_code)]
 pub fn junk_prng(seed: u64) -> u64 {
-    let mut state = seed.wrapping_add(0x5A5A5A5A5A5A5A5A);
+    let mut state = seed.wrapping_add(JUNK_MUL_BIG);
     for _ in 0..100 {
         state ^= state << 13;
         state ^= state >> 7;
@@ -152,17 +146,15 @@ pub fn junk_prng(seed: u64) -> u64 {
     state
 }
 
-/// Dummy function 14
 #[allow(dead_code)]
 pub fn junk_checksum(data: &[u8]) -> u16 {
     let mut sum = 0u32;
     for &b in data {
         sum = sum.wrapping_add(b as u32);
     }
-    (sum & 0xFFFF) as u16 ^ 0xFFFF
+    (sum & 0xFFFF) as u16 ^ (JUNK_A & 0xFFFF) as u16
 }
 
-/// Dummy function 15
 #[allow(dead_code)]
 pub fn junk_base64_simulate(input: &[u8]) -> Vec<u8> {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

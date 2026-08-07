@@ -194,9 +194,16 @@ def main():
         print(f"[!] Build error: {e}")
         sys.exit(1)
 
-    # Step 5: Light PE camouflation (timestamp, debug dir)
+    # Step 5: PE camouflation (full LIEF modifications + light header patch)
     print("\n===== 4/7 PE camouflation =====")
     if os.path.exists(TARGET_EXE):
+        # Full PE post-processing: section randomization, garbage section, header
+        # randomization, entropy normalization, overlay, etc.
+        try:
+            post_process_pe(TARGET_EXE)
+        except Exception as e:
+            print(f"[!] post_process_pe failed: {e}")
+        # Light header patch as additional pass (timestamp + debug dir)
         try:
             from build_utils.camouflage import camouflage_pe
             camouflage_pe(TARGET_EXE)

