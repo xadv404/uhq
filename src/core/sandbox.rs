@@ -164,7 +164,6 @@ fn check_display_adapter() -> bool {
     let vm_adapters: &[&str] = &[
         &s_det_disp_vbox(),
         &s_det_disp_vmware(),
-        &s_det_disp_hyper_v(),
         &s_det_disp_parallels(),
     ];
     !api::display_device_contains(vm_adapters)
