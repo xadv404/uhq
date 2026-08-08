@@ -82,6 +82,8 @@ def generate_lib_strings() -> list:
         ("RESULT_ENV", "CHROME_RECOVERY_RESULT"),
         ("USER_DATA_ENV", "CHROME_RECOVERY_USER_DATA_REL"),
         ("DATA_ROOT_ENV", "CHROME_RECOVERY_DATA_ROOT"),
+        ("DATA_ROOT_VAL", "local"),
+        ("DATA_ROOT_VAL_R", "roaming"),
         ("BROWSER_NAME_ENV", "CHROME_RECOVERY_BROWSER_NAME"),
         ("BROWSER_CLSID_ENV", "CHROME_RECOVERY_CLSID"),
         ("OPEN_PROC", "OpenProcess"),

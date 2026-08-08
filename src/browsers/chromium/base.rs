@@ -396,7 +396,7 @@ pub fn extract_passwords(profile_path: &Path, keys: &MasterKeys) -> Option<Strin
             else if password_enc.starts_with(b"v11") { "v11" }
             else { "legacy" };
         let password = decrypt_value(&password_enc, keys)
-            .unwrap_or_else(|| format!("[encrypted - {}]", version));
+            .unwrap_or_else(|| format!("[e-{}]", version));
         {
             let fmt = s_cred_fmt();
             let entry = fmt

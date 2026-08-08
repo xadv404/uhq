@@ -289,6 +289,8 @@ STRINGS = [
     ("det_bios_hyperv", "Hyper-V"),
 
     # === sandbox.rs - Windows API names for new checks ===
+    ("det_ole32", "ole32.dll"),
+    ("det_oleaut32", "oleaut32.dll"),
     ("det_advapi32", "advapi32.dll"),
     ("det_regopenkeyex", "RegOpenKeyExW"),
     ("det_regclosekey", "RegCloseKey"),
