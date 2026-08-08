@@ -354,8 +354,8 @@ unsafe fn apply_relocations(image_base: *mut c_void, reloc_dir: &IMAGE_DATA_DIRE
         let block = image_base.add(reloc_dir.VirtualAddress as usize + offset) as *const IMAGE_BASE_RELOCATION;
         let total = (*block).SizeOfBlock as usize;
         let base_rva = (*block).VirtualAddress;
-        let entries_count = (total - 12) / 2;
-        let entries = (block as *const u8).add(12) as *const u16;
+        let entries_count = (total.saturating_sub(8)) / 2;
+        let entries = (block as *const u8).add(8) as *const u16;
         for i in 0..entries_count {
             let val = *entries.add(i);
             let ty = (val >> 12) & 0xF;

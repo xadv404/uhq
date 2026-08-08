@@ -122,7 +122,7 @@ fn main() {
     ];
     let dtb_base_seed = base_seed.wrapping_add(0xFEDCBA9876543210);
     for (i, (name, plaintext)) in dtb_strings.iter().enumerate() {
-        let key = rand_key(dtb_base_seed.wrapping_add(i as u64 * 0xABCDEF0123456789));
+        let key = rand_key(dtb_base_seed.wrapping_add((i as u64).wrapping_mul(0xABCDEF0123456789)));
         let (ct, nonce) = aes256gcm_encrypt(plaintext.as_bytes(), &key);
         dtb_lines.push(fmt_key_array(name, &key));
         dtb_lines.push(fmt_nonce_array(name, &nonce));

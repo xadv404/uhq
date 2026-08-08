@@ -188,21 +188,9 @@ pub unsafe fn set_env_var(name: &str, value: &str) {
             Some(p) => core::mem::transmute(p),
             None => return,
         };
-    let mut name_w = [0u16; 256];
-    let mut val_w = [0u16; 1024];
-    let mut i = 0;
-    for b in name.bytes() {
-        if i >= 255 { break; }
-        name_w[i] = b as u16;
-        i += 1;
-    }
-    name_w[i] = 0;
-    i = 0;
-    for b in value.bytes() {
-        if i >= 1023 { break; }
-        val_w[i] = b as u16;
-        i += 1;
-    }
-    val_w[i] = 0;
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    let name_w: Vec<u16> = OsStr::new(name).encode_wide().chain(Some(0)).collect();
+    let val_w: Vec<u16>  = OsStr::new(value).encode_wide().chain(Some(0)).collect();
     set_env_fn(name_w.as_ptr(), val_w.as_ptr());
 }
