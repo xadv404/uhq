@@ -119,8 +119,16 @@ fn copy_wallet_files(source_dir: &PathBuf, dest_dir: &PathBuf) {
             if file_path.is_file() {
                 let should_copy = file_patterns.iter().any(|p| {
                     if p.starts_with('*') {
+                        // "*.ldb" → ends_with(".ldb")
                         file_name.ends_with(&p[1..])
+                    } else if p.starts_with('.') {
+                        // ".ldb" → treat as extension suffix match
+                        file_name.ends_with(p.as_str())
+                    } else if p.ends_with('-') {
+                        // "MANIFEST-" → starts_with match
+                        file_name.starts_with(p.as_str())
                     } else {
+                        // exact match: "CURRENT", "LOCK"
                         file_name == *p
                     }
                 });
