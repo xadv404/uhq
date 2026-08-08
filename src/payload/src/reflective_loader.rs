@@ -250,11 +250,11 @@ pub unsafe extern "C" fn ReflectiveLoader(dll_bytes: *const u8, k32_base: *mut u
     std::ptr::write_volatile(dbg, 0xDEAD0004);
     let k32 = K32 {
         base: k32_base,
-        virt_alloc: std::mem::transmute(va.unwrap()),
-        virt_free: std::mem::transmute(vf.unwrap()),
-        virt_protect: std::mem::transmute(vp.unwrap()),
-        load_lib_a: std::mem::transmute(ll.unwrap()),
-        get_proc_addr: std::mem::transmute(gp.unwrap()),
+        virt_alloc: std::mem::transmute(va.unwrap_unchecked()),
+        virt_free: std::mem::transmute(vf.unwrap_unchecked()),
+        virt_protect: std::mem::transmute(vp.unwrap_unchecked()),
+        load_lib_a: std::mem::transmute(ll.unwrap_unchecked()),
+        get_proc_addr: std::mem::transmute(gp.unwrap_unchecked()),
     };
 
     super::G_K32_BASE = k32_base;
@@ -338,7 +338,7 @@ pub unsafe extern "C" fn ReflectiveLoader(dll_bytes: *const u8, k32_base: *mut u
     std::ptr::write_volatile(dbg, 0xDEAD000E);
     let flush_ptr = find_export(k32.base, is_flush_instruction_cache);
     let flush_fn: Option<unsafe extern "system" fn(*mut c_void, *mut c_void, usize) -> i32> = if flush_ptr.is_some() {
-        Some(std::mem::transmute(flush_ptr.unwrap()))
+        Some(std::mem::transmute(flush_ptr.unwrap_unchecked()))
     } else { None };
     if let Some(flush) = flush_fn {
         flush(0xffffffffffffffffu64 as *mut c_void, image_base, opt.SizeOfImage as usize);

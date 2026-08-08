@@ -77,7 +77,7 @@ def generate_stealth_tables(output_path: str):
     # AES helper function
     lines.append("fn _aes_dec_stealth(ct: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {")
     lines.append("    use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};")
-    lines.append("    let cipher = Aes256Gcm::new_from_slice(key).unwrap();")
+    lines.append("    let cipher = unsafe { Aes256Gcm::new_from_slice(key).unwrap_unchecked() };")
     lines.append("    cipher.decrypt(Nonce::from_slice(nonce), ct).unwrap_or_default()")
     lines.append("}")
     lines.append("")

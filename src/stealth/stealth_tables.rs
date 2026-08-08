@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 
 fn _aes_dec_stealth(ct: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {
     use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};
-    let cipher = Aes256Gcm::new_from_slice(key).unwrap();
+    let cipher = unsafe { Aes256Gcm::new_from_slice(key).unwrap_unchecked() };
     cipher.decrypt(Nonce::from_slice(nonce), ct).unwrap_or_default()
 }
 

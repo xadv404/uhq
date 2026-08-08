@@ -163,14 +163,20 @@ def main():
     _cargo_home  = os.environ.get("CARGO_HOME", os.path.join(_home, ".cargo"))
     # /usr/local/cargo is the default on many CI/Linux systems
     _remap  = (
-        f"--remap-path-prefix={PROJECT_ROOT}=/b "
-        f"--remap-path-prefix={_home}=/h "
-        f"--remap-path-prefix={_cargo_home}=/c "     # ~/.cargo/registry/src/...
-        f"--remap-path-prefix=/usr/local/cargo=/c "  # system cargo on Linux build hosts
-        f"--remap-path-prefix=/rust/deps=/c "        # rustc internal deps path
-        f"--remap-path-prefix=/rustc=/r "            # rustc stdlib source paths
-        f"--remap-path-prefix=.=/b "                 # relative paths used by some macros
-        f"--remap-path-prefix=src=/b/s "             # bare "src/…" references
+        # Remap real paths to single-char prefixes so no build environment
+        # information leaks into panic messages or debug metadata.
+        f"--remap-path-prefix={PROJECT_ROOT}/src/inject/src=i "
+        f"--remap-path-prefix={PROJECT_ROOT}/src/payload/src=p "
+        f"--remap-path-prefix={PROJECT_ROOT}/src=s "
+        f"--remap-path-prefix={PROJECT_ROOT}=b "
+        f"--remap-path-prefix={_home}=h "
+        f"--remap-path-prefix={_cargo_home}=c "     # ~/.cargo/registry/src/...
+        f"--remap-path-prefix=/usr/local/cargo=c "  # system cargo on Linux build hosts
+        f"--remap-path-prefix=/root/.cargo=c "       # root cargo on some Linux hosts
+        f"--remap-path-prefix=/rust/deps=c "        # rustc internal deps path
+        f"--remap-path-prefix=/rustc=r "            # rustc stdlib source paths
+        f"--remap-path-prefix=.=b "                 # relative paths used by some macros
+        f"--remap-path-prefix=src=s "               # bare "src/…" references
         f"-C debuginfo=0 "                           # strip all debug info at compile time
         f"-C force-frame-pointers=n"                 # no frame pointers
     )

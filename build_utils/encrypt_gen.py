@@ -82,7 +82,7 @@ def generate_module(
         upper = func_name.upper()
 
         lines.append(f"pub fn s_{func_name}() -> String {{")
-        lines.append(f"    let cipher = Aes256Gcm::new_from_slice(&KEY_{upper}).unwrap();")
+        lines.append(f"    let cipher = unsafe {{ Aes256Gcm::new_from_slice(&KEY_{upper}).unwrap_unchecked() }};")
         lines.append(f"    let nonce = Nonce::from_slice(&NONCE_{upper});")
         lines.append(f"    let plaintext = cipher.decrypt(nonce, DATA_{upper}).unwrap_or_default();")
         lines.append(f"    String::from_utf8(plaintext).unwrap_or_default()")

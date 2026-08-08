@@ -353,7 +353,7 @@ def generate_polymorphic_keys(output_dir: str):
 
     lines.append("// ===== AES decrypt functions =====")
     lines.append("pub fn aes_decrypt(encoded: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {")
-    lines.append("    let cipher = Aes256Gcm::new_from_slice(key).unwrap();")
+    lines.append("    let cipher = unsafe { Aes256Gcm::new_from_slice(key).unwrap_unchecked() };")
     lines.append("    let n = Nonce::from_slice(nonce);")
     lines.append("    cipher.decrypt(n, encoded).unwrap_or_default()")
     lines.append("}")
@@ -395,7 +395,7 @@ def generate_polymorphic_keys(output_dir: str):
 
     inject_lines.append("// ===== AES decrypt functions =====")
     inject_lines.append("pub fn aes_decrypt(encoded: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {")
-    inject_lines.append("    let cipher = Aes256Gcm::new_from_slice(key).unwrap();")
+    inject_lines.append("    let cipher = unsafe { Aes256Gcm::new_from_slice(key).unwrap_unchecked() };")
     inject_lines.append("    let n = Nonce::from_slice(nonce);")
     inject_lines.append("    cipher.decrypt(n, encoded).unwrap_or_default()")
     inject_lines.append("}")

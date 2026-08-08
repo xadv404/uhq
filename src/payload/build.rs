@@ -12,7 +12,7 @@ fn aes256gcm_encrypt(plaintext: &[u8], key: &[u8; 32]) -> (Vec<u8>, [u8; 12]) {
         }
         buf
     };
-    let cipher = Aes256Gcm::new_from_slice(key).unwrap();
+    let cipher = Aes256Gcm::new_from_slice(key).expect("key len");
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ct = cipher.encrypt(nonce, plaintext).expect("aes encrypt");
     (ct, nonce_bytes)
@@ -127,7 +127,7 @@ fn main() {
         "use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};".to_string(),
         String::new(),
         "pub fn aes_dec(ct: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {".to_string(),
-        "    let cipher = Aes256Gcm::new_from_slice(key).unwrap();".to_string(),
+        "    let cipher = unsafe { Aes256Gcm::new_from_slice(key).unwrap_unchecked() };".to_string(),
         "    let n = Nonce::from_slice(nonce);".to_string(),
         "    cipher.decrypt(n, ct).unwrap_or_default()".to_string(),
         "}".to_string(),
@@ -207,7 +207,7 @@ fn main() {
         "use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};".to_string(),
         String::new(),
         "pub fn unwrap_key32(ct: &[u8], wrap: &[u8; 32], n: &[u8; 12]) -> [u8; 32] {".to_string(),
-        "    let cipher = Aes256Gcm::new_from_slice(wrap).unwrap();".to_string(),
+        "    let cipher = unsafe { Aes256Gcm::new_from_slice(wrap).unwrap_unchecked() };".to_string(),
         "    let plain = cipher.decrypt(Nonce::from_slice(n), ct).unwrap_or_default();".to_string(),
         "    let mut out = [0u8; 32];".to_string(),
         "    let len = plain.len().min(32);".to_string(),

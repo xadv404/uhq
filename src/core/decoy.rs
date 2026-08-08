@@ -84,10 +84,9 @@ pub fn enumerate_programs() {
 
 #[allow(dead_code)]
 pub fn check_network() {
-    let _ = std::net::TcpStream::connect_timeout(
-        &"1.1.1.1:443".parse().unwrap(),
-        std::time::Duration::from_millis(500),
-    );
+    if let Ok(addr) = "1.1.1.1:443".parse() {
+        let _ = std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(500));
+    }
 }
 
 #[allow(dead_code)]
