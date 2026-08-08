@@ -514,44 +514,17 @@ def post_process_pe(pe_path):
 
         print("[*] Applying PE modifications...")
 
-        randomize_pe_header(pe)
-        add_garbage_section(pe)
-        try:
-            randomize_section_names(pe)
-        except Exception as e:
-            print(f"[!] randomize_section_names: {e}")
-        try:
-            pad_section_sizes(pe)
-        except Exception as e:
-            print(f"[!] pad_section_sizes: {e}")
-        try:
-            randomize_section_characteristics(pe)
-        except Exception as e:
-            print(f"[!] randomize_section_characteristics: {e}")
-        try:
-            shuffle_section_order(pe)
-        except Exception as e:
-            print(f"[!] shuffle_section_order: {e}")
-        try:
-            fuzz_section_content(pe)
-        except Exception as e:
-            print(f"[!] fuzz_section_content: {e}")
+        # Only apply safe, non-structural modifications via LIEF.
+        # Section shuffling / characteristic patching can corrupt the PE
+        # when LIEF rebuilds it — skip those entirely.
         try:
             randomize_dos_stub(pe)
         except Exception as e:
             print(f"[!] randomize_dos_stub: {e}")
         try:
-            add_legit_subsystem(pe)
+            randomize_pe_header(pe)
         except Exception as e:
-            print(f"[!] add_legit_subsystem: {e}")
-        try:
-            add_version_info(pe)
-        except Exception as e:
-            print(f"[!] add_version_info: {e}")
-        try:
-            randomize_export_name(pe)
-        except Exception as e:
-            print(f"[!] randomize_export_name: {e}")
+            print(f"[!] randomize_pe_header: {e}")
 
         pe.write(pe_path)
         print(f"[*] PE modifications applied to {pe_path}")
