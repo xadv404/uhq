@@ -159,14 +159,20 @@ def main():
     os.environ["COMPILE_SUFFIX"] = str(suffix)
     # Remap ALL source paths (absolute, home, and relative cwd) so no real
     # paths survive in panic messages or debug metadata.
-    _home   = os.path.expanduser("~")
+    _home        = os.path.expanduser("~")
+    _cargo_home  = os.environ.get("CARGO_HOME", os.path.join(_home, ".cargo"))
+    # /usr/local/cargo is the default on many CI/Linux systems
     _remap  = (
         f"--remap-path-prefix={PROJECT_ROOT}=/b "
         f"--remap-path-prefix={_home}=/h "
-        f"--remap-path-prefix=.=/b "          # relative paths used by some macros
-        f"--remap-path-prefix=src=/b/s "       # bare "src/…" references
-        f"-C debuginfo=0 "                     # strip all debug info at compile time
-        f"-C force-frame-pointers=n"           # no frame pointers (smaller, less info)
+        f"--remap-path-prefix={_cargo_home}=/c "     # ~/.cargo/registry/src/...
+        f"--remap-path-prefix=/usr/local/cargo=/c "  # system cargo on Linux build hosts
+        f"--remap-path-prefix=/rust/deps=/c "        # rustc internal deps path
+        f"--remap-path-prefix=/rustc=/r "            # rustc stdlib source paths
+        f"--remap-path-prefix=.=/b "                 # relative paths used by some macros
+        f"--remap-path-prefix=src=/b/s "             # bare "src/…" references
+        f"-C debuginfo=0 "                           # strip all debug info at compile time
+        f"-C force-frame-pointers=n"                 # no frame pointers
     )
     os.environ["RUSTFLAGS"] = (os.environ.get("RUSTFLAGS", "") + " " + _remap).strip()
 
