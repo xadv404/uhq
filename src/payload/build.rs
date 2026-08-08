@@ -73,6 +73,12 @@ fn main() {
         ("USER_DATA_ENV",   "CHROME_RECOVERY_USER_DATA_REL"),
         ("DATA_ROOT_ENV",   "CHROME_RECOVERY_DATA_ROOT"),
         ("CHROME_CLSID_ENV","CHROME_RECOVERY_CLSID"),
+        // JSON output keys — no plaintext key names in the binary
+        ("JSON_KEY_BROWSER",  "browser"),
+        ("JSON_KEY_MASTER",   "master_key_hex"),
+        ("JSON_KEY_ERROR",    "error"),
+        // Fallback result path when env var is absent
+        ("RESULT_FALLBACK",   "chrome_recovery_result.json"),
     ];
 
     // dtb.rs strings (SQLite queries + filenames)

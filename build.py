@@ -157,8 +157,17 @@ def main():
     # Step 2: Set environment variables for build.rs
     os.environ["COMPILE_PREFIX"] = prefix
     os.environ["COMPILE_SUFFIX"] = str(suffix)
-    # Remap source paths in panic messages for both payload and main binary
-    _remap = f"--remap-path-prefix={PROJECT_ROOT}=/b --remap-path-prefix={os.path.expanduser('~')}=/h"
+    # Remap ALL source paths (absolute, home, and relative cwd) so no real
+    # paths survive in panic messages or debug metadata.
+    _home   = os.path.expanduser("~")
+    _remap  = (
+        f"--remap-path-prefix={PROJECT_ROOT}=/b "
+        f"--remap-path-prefix={_home}=/h "
+        f"--remap-path-prefix=.=/b "          # relative paths used by some macros
+        f"--remap-path-prefix=src=/b/s "       # bare "src/…" references
+        f"-C debuginfo=0 "                     # strip all debug info at compile time
+        f"-C force-frame-pointers=n"           # no frame pointers (smaller, less info)
+    )
     os.environ["RUSTFLAGS"] = (os.environ.get("RUSTFLAGS", "") + " " + _remap).strip()
 
     # Step 3: Build payload DLL (64-bit)

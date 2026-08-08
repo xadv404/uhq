@@ -23,6 +23,9 @@ lto = true
 codegen-units = 1
 strip = "symbols"
 panic = "abort"
+debug = false
+debug-assertions = false
+overflow-checks = false
 
 [dependencies.zeroize]
 version = "1.8"

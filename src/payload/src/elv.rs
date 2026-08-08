@@ -422,7 +422,7 @@ unsafe fn try_one(clsid: &GUID, iid: &GUID, enc: &[u8], slots: &[usize]) -> Resu
         EOAC_DYNAMIC_CLOAKING,
     );
 
-    let mut last = String::from("no slot worked");
+    let mut last = String::from("e1");
     for &slot in slots {
         crate::step(113, &format!("try_one: DecryptData slot {slot}"));
         match call_decrypt_at_slot(punk, enc, slot) {
