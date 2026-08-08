@@ -203,7 +203,7 @@ fn check_no_extra_vm_drivers() -> bool {
         s_det_vmrawdsk_sys(),
         s_det_vmusbmouse_sys(),
         s_det_vmkbd_sys(),
-        s_det_vmMemctl_sys(),
+        s_det_vmmemctl_sys(),
         s_det_vboxwddm_sys(),
     ];
     for name in &checks {
