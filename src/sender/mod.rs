@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde_json::json;
 use crate::encrypted::*;
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct GofileResponse {
     status: String,
@@ -9,6 +10,7 @@ struct GofileResponse {
     error: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct GofileData {
     #[serde(rename = "downloadPage")]

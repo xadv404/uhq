@@ -266,7 +266,7 @@ STRINGS = [
     ("det_vmrawdsk_sys", "vmrawdsk.sys"),
     ("det_vmusbmouse_sys", "vmusbmouse.sys"),
     ("det_vmkbd_sys", "vmkbd.sys"),
-    ("det_vmMemctl_sys", "vmMemctl.sys"),
+    ("det_vmmemctl_sys", "vmMemctl.sys"),
     ("det_vboxwddm_sys", "VBoxWddm.sys"),
     ("det_vboxdisp_sys", "VBoxDisp.dll"),
 

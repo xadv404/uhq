@@ -4,6 +4,8 @@
 // All hash constants are const, so the compiler emits only u32 literals — no API name
 // string ever appears in any segment of the binary.
 
+#![allow(dead_code, non_upper_case_globals)]
+
 include!(concat!(env!("OUT_DIR"), "/api_hash_salt.rs"));
 
 // ROR13 additive hash (industry standard, used by Metasploit/CS shellcode).

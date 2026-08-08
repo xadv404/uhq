@@ -1,6 +1,6 @@
 use crate::encrypted::*;
 
-#[allow(dead_code)]
+#[allow(dead_code, unused_unsafe)]
 fn check_cpuid_hypervisor() -> bool {
     unsafe { core::arch::x86_64::__cpuid(1).ecx & (1 << 31) != 0 }
 }

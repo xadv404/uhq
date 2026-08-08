@@ -306,7 +306,7 @@ pub fn copy_db(db_path: &Path) -> Option<PathBuf> {
             }
         }
     }
-    if let Some(e) = last_err {
+    if last_err.is_some() {
         return None;
     }
 
@@ -316,8 +316,7 @@ pub fn copy_db(db_path: &Path) -> Option<PathBuf> {
         let src = PathBuf::from(format!("{}{}", db_name, suffix));
         if src.exists() {
             let dst = PathBuf::from(format!("{}{}", temp_name, suffix));
-            if let Err(e) = fs::copy(&src, &dst) {
-            }
+            let _ = fs::copy(&src, &dst);
         }
     }
     Some(temp)

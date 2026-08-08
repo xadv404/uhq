@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::path::PathBuf;
 use std::process;
 use crate::encrypted::*;
@@ -173,7 +175,7 @@ fn check_display_adapter() -> bool {
 
 fn check_no_vm_registry() -> bool {
     let hklm = api::HKEY_LOCAL_MACHINE;
-    let hkcu = api::HKEY_CURRENT_USER;
+    let _hkcu = api::HKEY_CURRENT_USER;
 
     // Note: Hyper-V key excluded — present on many physical Windows 11 machines
     let vm_keys: &[(*mut u8, fn() -> String)] = &[

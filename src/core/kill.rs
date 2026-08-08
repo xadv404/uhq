@@ -1,3 +1,5 @@
+#![allow(dead_code, non_upper_case_globals)]
+
 use std::ffi::c_void;
 use crate::core_utils::api_hash::{
     H_KERNEL32,

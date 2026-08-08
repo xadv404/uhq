@@ -62,7 +62,6 @@ pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let result = inject::recover_key(&name_owned, &payload);
-        let klen = result.as_ref().map(|k| k.len()).unwrap_or(0);
         let _ = tx.send(result);
     });
 

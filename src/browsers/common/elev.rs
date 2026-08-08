@@ -159,11 +159,7 @@ fn start_service(name: &str) {
             (svc.close_svc)(scm, 0);
             return;
         }
-        let r = (svc.start_svc)(h, 0, std::ptr::null());
-        if r == 0 {
-            let err = std::io::Error::last_os_error();
-        } else {
-        }
+        let _r = (svc.start_svc)(h, 0, std::ptr::null());
         (svc.close_svc)(h, 0);
         (svc.close_svc)(scm, 0);
     }
@@ -277,7 +273,7 @@ unsafe fn try_slots(punk: *mut c_void, enc: &[u8], slots: &[usize]) -> Result<Ve
 
 unsafe fn try_one(clsid: &[u8], iid: &[u8], enc: &[u8], slots: &[usize]) -> Result<Vec<u8>, String> {
     let api = init_com().ok_or("e0")?;
-    let hr = (api.co_init)(std::ptr::null(), COINIT_MULTITHREADED);
+    let _hr = (api.co_init)(std::ptr::null(), COINIT_MULTITHREADED);
 
     let mut punk: *mut c_void = std::ptr::null_mut();
     let hr = (api.co_create)(clsid.as_ptr() as *const c_void, std::ptr::null(), CLSCTX_LOCAL_SERVER, iid.as_ptr() as *const c_void, &mut punk);

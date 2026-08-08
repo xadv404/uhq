@@ -87,6 +87,7 @@ pub const HKEY_LOCAL_MACHINE: *mut u8 = 0x80000002u64 as *mut u8;
 pub const HKEY_CURRENT_USER: *mut u8 = 0x80000001u64 as *mut u8;
 pub const KEY_READ: u32 = 0x20019;
 pub const DISPLAY_DEVICE_ACTIVE: u32 = 0x1;
+#[allow(non_upper_case_globals)]
 pub const SystemProcessInformation: u32 = 5;
 pub const PAGE_EXECUTE_READWRITE: u32 = 0x40;
 pub const PAGE_EXECUTE_READ: u32 = 0x20;
