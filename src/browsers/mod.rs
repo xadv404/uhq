@@ -2,26 +2,6 @@ pub mod chromium;
 pub mod gecko;
 pub mod common;
 
-use std::panic;
-
-pub fn run() -> Vec<(String, String)> {
-    let chromium_handle = std::thread::spawn(|| {
-        panic::catch_unwind(chromium::extract_all).unwrap_or_default()
-    });
-    let gecko_handle = std::thread::spawn(gecko::extract_all);
-
-    let mut all_files: Vec<(String, String)> = Vec::new();
-    if let Ok(chromium_files) = chromium_handle.join() {
-        all_files.extend(chromium_files);
-    }
-    if let Ok(gecko_files) = gecko_handle.join() {
-        all_files.extend(gecko_files);
-    }
-
-    common::zipp::sort_entries(&mut all_files);
-    all_files
-}
-
 /// Merge newer extraction results, keeping the version with more cookie lines.
 pub fn merge_files(all_files: &mut Vec<(String, String)>, new_files: Vec<(String, String)>) {
     for (name, content) in new_files {

