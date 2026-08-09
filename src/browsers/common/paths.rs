@@ -162,15 +162,13 @@ pub fn discover_installed_browsers() -> Vec<BrowserPath> {
     let mut installed = Vec::new();
 
     for b in all_browsers() {
-        let exe_hit = find_app_path(&b.exe).is_some();
         let root = match b.root {
             DataRoot::Local => &local,
             DataRoot::Roaming => &roaming,
         };
         let user_data = Path::new(root).join(&b.user_data_rel);
-        let user_data_exists = user_data.exists();
-
-        if exe_hit || user_data_exists {
+        let has_local_state = user_data.join(s_local_state()).exists();
+        if user_data.exists() && has_local_state {
             installed.push(b);
         }
     }

