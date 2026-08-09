@@ -17,6 +17,14 @@ import struct
 from datetime import datetime
 from typing import List
 
+# Force UTF-8 output on Windows to avoid charmap codec errors from cargo output
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    # Also set PYTHONUTF8 and PYTHONIOENCODING for child processes
+    os.environ["PYTHONUTF8"] = "1"
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -251,6 +259,8 @@ def run_command(cmd: List[str], description: str) -> bool:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
             cwd=PROJECT_ROOT,
             env={**os.environ}
@@ -397,7 +407,8 @@ def main():
         process = subprocess.Popen(
             ["rustup", "run", _NIGHTLY, "cargo", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,
             cwd=PROJECT_ROOT, env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", bufsize=1
         )
         for line in process.stdout:
             print(line, end="")
