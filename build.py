@@ -43,8 +43,13 @@ def _detect_nightly_toolchain():
     """Return the nightly toolchain name that rustup knows about, or 'nightly'."""
     try:
         out = subprocess.check_output(["rustup", "toolchain", "list"], text=True, stderr=subprocess.DEVNULL)
-        for line in out.splitlines():
-            tok = line.split()[0] if line.split() else ""
+        # Prefer the gnu variant on Windows, any nightly on Linux
+        lines = [l.split()[0] for l in out.splitlines() if l.split()]
+        if _platform.system() == "Windows":
+            for tok in lines:
+                if tok.startswith("nightly") and "gnu" in tok:
+                    return tok
+        for tok in lines:
             if tok.startswith("nightly"):
                 return tok
     except Exception:
@@ -339,7 +344,8 @@ def main():
 
     # Step 3: Build payload DLL (64-bit)
     print("\n===== 2/7 Building Payload DLLs =====")
-    if not run_command(["cargo", f"+{_NIGHTLY}", "build", "--release", "-p", "chrome-payload"] + _CARGO_EXTRA, "Building chrome_payload.dll (64-bit)"):
+    _cargo_cmd = ["rustup", "run", _NIGHTLY, "cargo"]
+    if not run_command(_cargo_cmd + ["build", "--release", "-p", "chrome-payload"] + _CARGO_EXTRA, "Building chrome_payload.dll (64-bit)"):
         print("[!] Payload build failed - aborting")
         sys.exit(1)
     if not os.path.exists(TARGET_DLL):
@@ -353,7 +359,7 @@ def main():
     env = {**os.environ}
     try:
         process = subprocess.Popen(
-            ["cargo", f"+{_NIGHTLY}", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,
+            ["rustup", "run", _NIGHTLY, "cargo", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,
             cwd=PROJECT_ROOT, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
         )
