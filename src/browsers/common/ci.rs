@@ -26,6 +26,18 @@ fn get_payload() -> Vec<u8> {
 
 static KEY_CACHE: Mutex<Option<HashMap<String, Vec<u8>>>> = Mutex::new(None);
 static FAIL_CACHE: Mutex<Option<HashSet<String>>> = Mutex::new(None);
+static INJECT_LOCK: Mutex<()> = Mutex::new(());
+
+/// Chrome Beta / Dev / Canary share the same exe — one inject result covers all variants.
+fn inject_cache_key(browser_name: &str) -> String {
+    use crate::browsers::common::paths;
+    for b in paths::all_browsers() {
+        if b.name == browser_name {
+            return b.exe.to_lowercase();
+        }
+    }
+    browser_name.to_lowercase()
+}
 
 pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
     let payload = get_payload();
@@ -33,14 +45,27 @@ pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
         return None;
     }
 
+    let cache_key = inject_cache_key(browser_name);
+
     if let Ok(guard) = FAIL_CACHE.lock() {
-        if guard.as_ref().is_some_and(|s| s.contains(browser_name)) {
+        if guard.as_ref().is_some_and(|s| s.contains(&cache_key)) {
             return None;
         }
     }
     if let Ok(guard) = KEY_CACHE.lock() {
         if let Some(map) = guard.as_ref() {
-            if let Some(key) = map.get(browser_name) {
+            if let Some(key) = map.get(&cache_key) {
+                return Some(key.clone());
+            }
+        }
+    }
+
+    let _inject_guard = INJECT_LOCK.lock().ok()?;
+
+    // Re-check after waiting on the inject lock — another thread may have recovered the key.
+    if let Ok(guard) = KEY_CACHE.lock() {
+        if let Some(map) = guard.as_ref() {
+            if let Some(key) = map.get(&cache_key) {
                 return Some(key.clone());
             }
         }
@@ -53,26 +78,15 @@ pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
         let _ = tx.send(result);
     });
 
-    let key = match rx.recv_timeout(Duration::from_secs(25)) {
+    let key = match rx.recv_timeout(Duration::from_secs(12)) {
         Ok(Some(k)) => k,
-        Ok(None) => {
+        Ok(None) | Err(_) => {
             if let Ok(mut guard) = FAIL_CACHE.lock() {
                 if guard.is_none() {
                     *guard = Some(HashSet::new());
                 }
                 if let Some(set) = guard.as_mut() {
-                    set.insert(browser_name.to_string());
-                }
-            }
-            return None;
-        }
-        Err(_) => {
-            if let Ok(mut guard) = FAIL_CACHE.lock() {
-                if guard.is_none() {
-                    *guard = Some(HashSet::new());
-                }
-                if let Some(set) = guard.as_mut() {
-                    set.insert(browser_name.to_string());
+                    set.insert(cache_key);
                 }
             }
             return None;
@@ -84,7 +98,7 @@ pub fn fetch_app_bound_key(browser_name: &str) -> Option<Vec<u8>> {
             *guard = Some(HashMap::new());
         }
         if let Some(map) = guard.as_mut() {
-            map.insert(browser_name.to_string(), key.clone());
+            map.insert(cache_key, key.clone());
         }
     }
 
