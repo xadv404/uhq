@@ -67,12 +67,15 @@ def _detect_nightly_toolchain():
 _NIGHTLY = _detect_nightly_toolchain()
 
 if _platform.system() == "Windows":
-    # On Windows with nightly-x86_64-pc-windows-gnu we still need to tell
-    # Cargo which target to build for and point it at the bundled MinGW tools
-    # from the rustup toolchain (avoids requiring a separate MinGW install).
-    _CARGO_EXTRA = ["--target", "x86_64-pc-windows-gnu", "-Z", "build-std=std,panic_abort"]
-    _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "x86_64-pc-windows-gnu", "release")
+    # On Windows: build natively for the local target (no cross-compilation).
+    # We do NOT use -Z build-std here because it requires dlltool which is
+    # broken in the bundled rustup GNU toolchain on Windows. The precompiled
+    # stdlib shipped with the toolchain is sufficient.
+    _CARGO_EXTRA = []
+    _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "release")
 else:
+    # On Linux: cross-compile to Windows GNU target, recompile stdlib for
+    # maximum path stripping (dlltool is available via mingw-w64 package).
     _CARGO_EXTRA = ["--target", "x86_64-pc-windows-gnu", "-Z", "build-std=std,panic_abort"]
     _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "x86_64-pc-windows-gnu", "release")
 
@@ -356,35 +359,36 @@ def main():
     # Step 2: Set environment variables for build.rs
     os.environ["COMPILE_PREFIX"] = prefix
     os.environ["COMPILE_SUFFIX"] = str(suffix)
-    # Remap ALL source paths (absolute, home, and relative cwd) so no real
-    # paths survive in panic messages or debug metadata.
-    _home        = os.path.expanduser("~")
-    _cargo_home  = os.environ.get("CARGO_HOME", os.path.join(_home, ".cargo"))
-    # /usr/local/cargo is the default on many CI/Linux systems
-    _remap  = (
-        # Remap real paths to single-char prefixes so no build environment
-        # information leaks into panic messages or debug metadata.
-        f"--remap-path-prefix={PROJECT_ROOT}/src/inject/src=i "
-        f"--remap-path-prefix={PROJECT_ROOT}/src/payload/src=p "
-        f"--remap-path-prefix={PROJECT_ROOT}/src=s "
-        f"--remap-path-prefix={PROJECT_ROOT}=b "
-        f"--remap-path-prefix={_home}=h "
-        f"--remap-path-prefix={_cargo_home}=c "     # ~/.cargo/registry/src/...
-        f"--remap-path-prefix=/usr/local/cargo=c "  # system cargo on Linux build hosts
-        f"--remap-path-prefix=/root/.cargo=c "       # root cargo on some Linux hosts
-        f"--remap-path-prefix=/rust/deps=c "        # rustc internal deps path
-        f"--remap-path-prefix=/rustc=r "            # rustc stdlib source paths
-        f"--remap-path-prefix=.=b "                 # relative paths used by some macros
-        f"--remap-path-prefix=src=s "               # bare "src/…" references
-        f"-C debuginfo=0 "                           # strip all debug info at compile time
-        f"-C force-frame-pointers=n "               # no frame pointers
-        # nightly: suppress ALL location metadata (file/line in panics from any crate)
-        f"-Z location-detail=none "
-        # NOTE: panic=abort is set via Cargo.toml [profile.release] panic="abort"
-        # NOT via -C panic=immediate-abort in RUSTFLAGS — that flag conflicts with
-        # -Z build-std because it gets applied to core/std recompilation too.
-        f"-Z unstable-options"
-    )
+
+    _home       = os.path.expanduser("~")
+    _cargo_home = os.environ.get("CARGO_HOME", os.path.join(_home, ".cargo"))
+    # rustc on Windows accepts both / and \ in remap paths; use forward slashes
+    # so the same flags work cross-platform.
+    def _fwd(p): return p.replace("\\", "/")
+
+    _pr  = _fwd(PROJECT_ROOT)
+    _hm  = _fwd(_home)
+    _ch  = _fwd(_cargo_home)
+
+    _remap_flags = [
+        f"--remap-path-prefix={_pr}/src/inject/src=i",
+        f"--remap-path-prefix={_pr}/src/payload/src=p",
+        f"--remap-path-prefix={_pr}/src=s",
+        f"--remap-path-prefix={_pr}=b",
+        f"--remap-path-prefix={_hm}=h",
+        f"--remap-path-prefix={_ch}=c",
+        "--remap-path-prefix=/usr/local/cargo=c",
+        "--remap-path-prefix=/root/.cargo=c",
+        "--remap-path-prefix=/rust/deps=c",
+        "--remap-path-prefix=/rustc=r",
+        "--remap-path-prefix=.=b",
+        "--remap-path-prefix=src=s",
+        "-C debuginfo=0",
+        "-C force-frame-pointers=n",
+        "-Z location-detail=none",
+        "-Z unstable-options",
+    ]
+    _remap = " ".join(_remap_flags)
     # Merge with any flags already set (e.g. -C dlltool= added by setup_mingw_path)
     os.environ["RUSTFLAGS"] = (os.environ.get("RUSTFLAGS", "") + " " + _remap).strip()
 
