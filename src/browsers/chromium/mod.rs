@@ -12,3 +12,7 @@ pub fn extract_all() -> Vec<(String, String)> {
     }
     results
 }
+
+pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
+    base::extract_cookies_post_kill()
+}

