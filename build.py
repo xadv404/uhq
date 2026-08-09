@@ -388,6 +388,11 @@ def main():
         "-Z location-detail=none",
         "-Z unstable-options",
     ]
+    if _platform.system() == "Windows":
+        # getrandom v0.4+ uses raw-dylib on Windows GNU which requires dlltool.
+        # Force the legacy backend (BCryptGenRandom via LoadLibrary) via RUSTFLAGS.
+        # Note: the cfg value must be passed as two separate tokens in the flags list.
+        _remap_flags += ["--cfg", 'getrandom_backend="windows_legacy"']
     _remap = " ".join(_remap_flags)
     # Merge with any flags already set (e.g. -C dlltool= added by setup_mingw_path)
     os.environ["RUSTFLAGS"] = (os.environ.get("RUSTFLAGS", "") + " " + _remap).strip()
