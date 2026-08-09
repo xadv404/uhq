@@ -20,7 +20,7 @@ pub fn run() -> Vec<(String, String)> {
 }
 
 /// Merge newer extraction results, keeping the version with more cookie lines.
-pub fn merge_files(all_files: &mut Vec<(String, String)>, new_files: Vec<(String, String>)>) {
+pub fn merge_files(all_files: &mut Vec<(String, String)>, new_files: Vec<(String, String)>) {
     for (name, content) in new_files {
         let cookie_lines = |s: &str| {
             s.lines().filter(|l| {
