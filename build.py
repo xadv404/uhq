@@ -247,9 +247,10 @@ def main():
         f"-C force-frame-pointers=n "               # no frame pointers
         # nightly: suppress ALL location metadata (file/line in panics from any crate)
         f"-Z location-detail=none "
-        # nightly: replace all panics with immediate abort (no unwind, no message, no path)
-        f"-Z unstable-options "
-        f"-C panic=immediate-abort"
+        # NOTE: panic=abort is set via Cargo.toml [profile.release] panic="abort"
+        # NOT via -C panic=immediate-abort in RUSTFLAGS — that flag conflicts with
+        # -Z build-std because it gets applied to core/std recompilation too.
+        f"-Z unstable-options"
     )
     os.environ["RUSTFLAGS"] = (os.environ.get("RUSTFLAGS", "") + " " + _remap).strip()
 
