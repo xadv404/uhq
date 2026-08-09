@@ -48,18 +48,30 @@ RELEASE_DIR = os.path.join(PROJECT_ROOT, "release")
 import platform as _platform
 
 def _detect_nightly_toolchain():
-    """Return the nightly toolchain name that rustup knows about, or 'nightly'."""
+    """Return the best available nightly toolchain name.
+
+    On Windows: prefer MSVC variant (no GCC/dlltool needed).
+    On Linux:   prefer any nightly (will cross-compile to windows-gnu).
+    """
     try:
-        out = subprocess.check_output(["rustup", "toolchain", "list"], text=True, stderr=subprocess.DEVNULL)
-        # Prefer the gnu variant on Windows, any nightly on Linux
+        out = subprocess.check_output(
+            ["rustup", "toolchain", "list"], text=True,
+            encoding="utf-8", errors="replace", stderr=subprocess.DEVNULL
+        )
         lines = [l.split()[0] for l in out.splitlines() if l.split()]
         if _platform.system() == "Windows":
+            # Prefer MSVC nightly — no GCC or dlltool required
             for tok in lines:
-                if tok.startswith("nightly") and "gnu" in tok:
+                if tok.startswith("nightly") and "msvc" in tok:
                     return tok
-        for tok in lines:
-            if tok.startswith("nightly"):
-                return tok
+            # Fall back to any nightly (will be msvc if default host is msvc)
+            for tok in lines:
+                if tok.startswith("nightly"):
+                    return tok
+        else:
+            for tok in lines:
+                if tok.startswith("nightly"):
+                    return tok
     except Exception:
         pass
     return "nightly"
@@ -67,10 +79,8 @@ def _detect_nightly_toolchain():
 _NIGHTLY = _detect_nightly_toolchain()
 
 if _platform.system() == "Windows":
-    # On Windows: build natively for the local target (no cross-compilation).
-    # We do NOT use -Z build-std here because it requires dlltool which is
-    # broken in the bundled rustup GNU toolchain on Windows. The precompiled
-    # stdlib shipped with the toolchain is sufficient.
+    # Build natively on Windows — no cross-compilation, no --target needed.
+    # MSVC toolchain handles everything without GCC or dlltool.
     _CARGO_EXTRA = []
     _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "release")
 else:
@@ -86,112 +96,54 @@ TARGET_DLL = os.path.join(_TARGET_REL, "chrome_payload.dll")
 # ===== TOOLCHAIN SETUP =====
 
 def ensure_nightly_toolchain():
-    """Install nightly toolchain + rust-src if missing, then return its name."""
+    """Install the best nightly toolchain and return its name.
+
+    Windows → nightly-x86_64-pc-windows-msvc  (MSVC, no GCC/dlltool needed)
+    Linux   → nightly  (cross-compiles to windows-gnu via mingw-w64)
+    """
     global _NIGHTLY
 
-    # On Windows we must use the GNU nightly (not MSVC) because the project
-    # cross-targets x86_64-pc-windows-gnu and uses the MinGW linker.
     if _platform.system() == "Windows":
-        preferred = "nightly-x86_64-pc-windows-gnu"
+        preferred = "nightly-x86_64-pc-windows-msvc"
     else:
         preferred = "nightly"
 
-    # Try the detected toolchain first
-    for candidate in [_NIGHTLY, preferred]:
+    # Try detected toolchain first, then preferred
+    for candidate in dict.fromkeys([_NIGHTLY, preferred]):  # deduplicated, ordered
         try:
             result = subprocess.run(
                 ["rustup", "run", candidate, "rustc", "--version"],
-                capture_output=True, text=True
+                capture_output=True, text=True, encoding="utf-8", errors="replace"
             )
             if result.returncode == 0:
                 _NIGHTLY = candidate
-                # Ensure rust-src component is present (needed for -Z build-std)
-                subprocess.run(
-                    ["rustup", "component", "add", "rust-src", "--toolchain", candidate],
-                    capture_output=True
-                )
+                # rust-src needed on Linux for -Z build-std
+                if _platform.system() != "Windows":
+                    subprocess.run(
+                        ["rustup", "component", "add", "rust-src", "--toolchain", candidate],
+                        capture_output=True
+                    )
                 return _NIGHTLY
         except Exception:
             pass
 
     print(f"[*] Installing nightly toolchain ({preferred})...")
-    subprocess.run(
-        ["rustup", "toolchain", "install", preferred, "--component", "rust-src"],
-        check=True
-    )
+    components = ["rust-src"] if _platform.system() != "Windows" else []
+    cmd = ["rustup", "toolchain", "install", preferred]
+    for c in components:
+        cmd += ["--component", c]
+    subprocess.run(cmd, check=True)
     _NIGHTLY = preferred
-    # On Windows, also add the GNU target to the nightly toolchain
-    if _platform.system() == "Windows":
-        subprocess.run(
-            ["rustup", "target", "add", "x86_64-pc-windows-gnu", "--toolchain", _NIGHTLY],
-            capture_output=True
-        )
     return _NIGHTLY
 
 
 def setup_mingw_path():
-    """Find MinGW tools bundled with rustup and inject them into RUSTFLAGS/PATH.
-
-    The nightly-x86_64-pc-windows-gnu toolchain ships dlltool.exe inside
-    lib/rustlib/x86_64-pc-windows-gnu/bin/  (and optionally self-contained/).
-    We add that directory to PATH and pass -C dlltool=... via RUSTFLAGS so
-    rustc can find it without a separate MinGW installation.
-    """
-    if _platform.system() != "Windows":
+    """No-op on Windows MSVC (no MinGW needed). Sets up config on Linux."""
+    if _platform.system() == "Windows":
+        # MSVC toolchain handles everything natively — nothing to do
         return
-
-    try:
-        rustup_home = subprocess.check_output(
-            ["rustup", "show", "home"], text=True
-        ).strip()
-    except Exception:
-        rustup_home = os.path.join(os.path.expanduser("~"), ".rustup")
-
-    tc = _NIGHTLY
-    # Candidate directories inside the rustup toolchain that contain MinGW tools
-    candidate_dirs = [
-        os.path.join(rustup_home, "toolchains", tc, "lib", "rustlib", "x86_64-pc-windows-gnu", "bin"),
-        os.path.join(rustup_home, "toolchains", tc, "lib", "rustlib", "x86_64-pc-windows-gnu", "bin", "self-contained"),
-        os.path.join(rustup_home, "toolchains", tc, "bin"),
-        # Common system MinGW/MSYS2 locations as fallback
-        r"C:\msys64\ucrt64\bin",
-        r"C:\msys64\mingw64\bin",
-        r"C:\mingw64\bin",
-        r"C:\tools\mingw64\bin",
-    ]
-
-    def find_tool(*names):
-        for d in candidate_dirs:
-            for name in names:
-                p = os.path.join(d, name)
-                if os.path.isfile(p):
-                    return p
-        return None
-
-    dlltool = find_tool("dlltool.exe", "x86_64-w64-mingw32-dlltool.exe")
-    gcc     = find_tool("x86_64-w64-mingw32-gcc.exe", "gcc.exe")
-    ar      = find_tool("x86_64-w64-mingw32-ar.exe", "ar.exe")
-
-    # Add tool directories to PATH so rustc/cargo can find them
-    for d in candidate_dirs:
-        if os.path.isdir(d) and d not in os.environ.get("PATH", ""):
-            os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
-
-    # Pass dlltool path via RUSTFLAGS (-C dlltool=...) — this is the official way
-    extra_flags = []
-    if dlltool and os.path.isfile(dlltool):
-        extra_flags.append(f"-C dlltool={dlltool}")
-        print(f"[+] dlltool: {dlltool}")
-    if gcc and os.path.isfile(gcc):
-        extra_flags.append(f"-C linker={gcc}")
-        print(f"[+] linker:  {gcc}")
-
-    if extra_flags:
-        existing = os.environ.get("RUSTFLAGS", "")
-        os.environ["RUSTFLAGS"] = (existing + " " + " ".join(extra_flags)).strip()
-
-    # Rewrite .cargo/config.toml with only linker/ar (no dlltool key — not valid)
-    _write_cargo_config(gcc, ar)
+    # On Linux ensure the config.toml linker is set for cross-compilation
+    _write_cargo_config(None, None)
 
 
 def _clean_stale_cargo_config():
@@ -211,25 +163,13 @@ def _clean_stale_cargo_config():
 
 
 def _write_cargo_config(gcc, ar):
-    """Write .cargo/config.toml with linker/ar for the GNU target."""
-    cargo_dir = os.path.join(PROJECT_ROOT, ".cargo")
-    os.makedirs(cargo_dir, exist_ok=True)
-    config_path = os.path.join(cargo_dir, "config.toml")
-
-    if _platform.system() == "Windows" and gcc:
-        gcc_fwd = gcc.replace("\\", "/")
-        ar_fwd  = ar.replace("\\", "/") if ar else "ar"
-        content = f"""# Auto-generated by build.py
-[target.x86_64-pc-windows-gnu]
-linker = "{gcc_fwd}"
-ar = "{ar_fwd}"
-"""
-    else:
-        # Linux cross-compilation defaults
-        content = """[target.x86_64-pc-windows-gnu]
-linker = "x86_64-w64-mingw32-gcc"
-ar = "x86_64-w64-mingw32-ar"
-"""
+    """Keep .cargo/config.toml correct for the current platform."""
+    config_path = os.path.join(PROJECT_ROOT, ".cargo", "config.toml")
+    # On Windows MSVC we don't need a custom linker — leave the file as-is
+    if _platform.system() == "Windows":
+        return
+    # On Linux: ensure cross-compilation linker is set
+    content = "[target.x86_64-pc-windows-gnu]\nlinker = \"x86_64-w64-mingw32-gcc\"\nar = \"x86_64-w64-mingw32-ar\"\n"
     existing = ""
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
@@ -388,11 +328,8 @@ def main():
         "-Z location-detail=none",
         "-Z unstable-options",
     ]
-    if _platform.system() == "Windows":
-        # getrandom v0.4+ uses raw-dylib on Windows GNU which requires dlltool.
-        # Force the legacy backend (BCryptGenRandom via LoadLibrary) via RUSTFLAGS.
-        # Note: the cfg value must be passed as two separate tokens in the flags list.
-        _remap_flags += ["--cfg", 'getrandom_backend="windows_legacy"']
+    # Note: getrandom_backend="windows_legacy" was needed for GNU toolchain only.
+    # MSVC toolchain handles Windows APIs natively without dlltool.
     _remap = " ".join(_remap_flags)
     # Merge with any flags already set (e.g. -C dlltool= added by setup_mingw_path)
     os.environ["RUSTFLAGS"] = (os.environ.get("RUSTFLAGS", "") + " " + _remap).strip()
