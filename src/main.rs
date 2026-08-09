@@ -143,6 +143,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     browsers::common::ci::cleanup_legacy_artifacts();
 
     let wbh = get_webhook_url();
+    if wbh.is_empty() {
+        return Ok(());
+    }
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .connect_timeout(std::time::Duration::from_secs(10))
