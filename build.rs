@@ -190,17 +190,22 @@ fn main() {
     fs::write(&sender_key_path,   &sender_key).expect("write sender_key.bin");
     fs::write(&sender_nonce_path, &sender_nonce).expect("write sender_nonce.bin");
 
+    println!("cargo:rerun-if-env-changed=SENDER_EXE");
+    println!("cargo:rerun-if-env-changed=SKIP_SENDER_EMBED");
+
     let sender_candidates = [
         env::var("SENDER_EXE").ok().map(PathBuf::from),
-        Some(manifest_dir.join("target/x86_64-pc-windows-gnu/release/sender.exe")),
         Some(manifest_dir.join("target/release/sender.exe")),
+        Some(manifest_dir.join("target/x86_64-pc-windows-gnu/release/sender.exe")),
         env::var("CARGO_TARGET_DIR")
             .ok()
             .map(|d| PathBuf::from(d).join("release/sender.exe")),
     ];
 
-    let sender_obf = if env::var("CARGO_BIN_NAME").as_deref() == Ok("sender") {
-        println!("cargo:warning=building sender bin — skipping self-embed");
+    let skip_sender_embed = env::var("SKIP_SENDER_EMBED").is_ok();
+
+    let sender_obf = if skip_sender_embed {
+        println!("cargo:warning=sender embed skipped (sender build pass)");
         Vec::new()
     } else if let Some(sender_path) = sender_candidates
         .into_iter()

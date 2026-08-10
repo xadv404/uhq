@@ -195,9 +195,12 @@ def generate_random_suffix():
 
 # ===== BUILD COMMANDS =====
 
-def run_command(cmd: List[str], description: str) -> bool:
+def run_command(cmd: List[str], description: str, extra_env: dict = None) -> bool:
     print(f"[*] {description}...")
     try:
+        cmd_env = {**os.environ}
+        if extra_env:
+            cmd_env.update(extra_env)
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -207,7 +210,7 @@ def run_command(cmd: List[str], description: str) -> bool:
             errors="replace",
             bufsize=1,
             cwd=PROJECT_ROOT,
-            env={**os.environ}
+            env=cmd_env
         )
         for line in process.stdout:
             if line.strip():
@@ -349,7 +352,11 @@ def main():
 
     # Step 3b: Build embedded sender (network delivery only)
     print("\n===== 2b/7 Building sender.exe =====")
-    if not run_command(_cargo_cmd + ["build", "--release", "--bin", "sender"] + _CARGO_EXTRA, "Building sender.exe"):
+    if not run_command(
+        _cargo_cmd + ["build", "--release", "--bin", "sender"] + _CARGO_EXTRA,
+        "Building sender.exe",
+        extra_env={"SKIP_SENDER_EMBED": "1"},
+    ):
         print("[!] Sender build failed - aborting")
         sys.exit(1)
     if not os.path.exists(TARGET_SENDER):
@@ -357,23 +364,36 @@ def main():
         sys.exit(1)
     sender_size = os.path.getsize(TARGET_SENDER)
     print(f"[+] Sender size: {sender_size} bytes")
-    os.environ["SENDER_EXE"] = TARGET_SENDER
 
-    # Step 4: Build main executable
+    # Step 4: Build main executable (embed sender built above — --bin jewish only)
     print("\n===== 3/7 Building jewish.exe =====")
-    env = {**os.environ}
+    env = {
+        **os.environ,
+        "SENDER_EXE": os.path.abspath(TARGET_SENDER),
+    }
+    env.pop("SKIP_SENDER_EMBED", None)
+    embed_ok = False
     try:
         process = subprocess.Popen(
-            ["rustup", "run", _NIGHTLY, "cargo", "build", "--release", "-p", "jewish"] + _CARGO_EXTRA,
+            ["rustup", "run", _NIGHTLY, "cargo", "build", "--release", "--bin", "jewish"] + _CARGO_EXTRA,
             cwd=PROJECT_ROOT, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace", bufsize=1
         )
         for line in process.stdout:
             print(line, end="")
+            if "embedded sender (deflate+AES-256-GCM)" in line:
+                embed_ok = True
+            if "sender.exe not found" in line and "inline fallback" in line:
+                embed_ok = False
         if process.wait() != 0:
             print("[!] Main build failed - aborting")
             sys.exit(1)
+        if not embed_ok:
+            print("[!] WARNING: sender.exe was NOT embedded in jewish.exe (inline fallback only)")
+            print(f"    Expected sender at: {env.get('SENDER_EXE')}")
+        else:
+            print(f"[+] Sender embedded from {env.get('SENDER_EXE')}")
     except Exception as e:
         print(f"[!] Build error: {e}")
         sys.exit(1)
