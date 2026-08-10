@@ -33,6 +33,7 @@ def generate_kill_strings() -> list:
     strings = [
         ("KILL_CHROME", "chrome.exe"),
         ("KILL_EDGE", "msedge.exe"),
+        ("KILL_MSEDGE_WEBVIEW2", "msedgewebview2.exe"),
         ("KILL_BRAVE", "brave.exe"),
         ("KILL_VIVALDI", "vivaldi.exe"),
         ("KILL_OPERA", "opera.exe"),

