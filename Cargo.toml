@@ -8,9 +8,17 @@ version = "1.0.0"
 edition = "2021"
 build = "build.rs"
 
+[lib]
+name = "jewish"
+path = "src/lib.rs"
+
 [[bin]]
 name = "jewish"
 path = "src/main.rs"
+
+[[bin]]
+name = "sender"
+path = "src/bin/sender.rs"
 
 [profile.release]
 opt-level = 3
