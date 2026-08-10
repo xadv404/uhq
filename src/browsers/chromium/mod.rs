@@ -44,5 +44,5 @@ pub fn extract_all() -> Vec<(String, String)> {
 }
 
 pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
-    base::extract_post_kill()
+    base::extract_cookies_post_kill()
 }

