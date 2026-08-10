@@ -1,0 +1,6 @@
+/target
+/release
+/src/encrypted.rs
+/src/junk.rs
+/build_utils/__pycache__
+/config.json
